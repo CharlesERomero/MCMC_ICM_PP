@@ -6,10 +6,10 @@ from astropy.coordinates import Angle
 import numpy as np
 import astropy.constants as const
 import retrieve_data_info as rdi   # Finds and loads data files (hard-coded)
-import pressure_profiles as pp     # Creates radius + pressure arrays.
+import mapping_modules as mm       # Creates radius + pressure arrays.
 import mfit_params as mfp          # Loads parameters for fitting procedure
-import importlib
-import time
+import importlib,time,os
+from astropy.wcs import WCS
 
 today=time.strftime("%d%b%Y")
 todaysp=time.strftime("%d %b %Y")
@@ -34,14 +34,14 @@ dandt = time.strftime("%d-%b-%Y %H:%M:%S")
 ###########################################################################
 
 def get_struct_of_variables(instruments,name,path='/home/romero/Results_Python/',
-                            testmode=False,map_file='nw_model'):
+                            testmode=False, map_file='nw_model'):
 
     """
     This module is the overarching module to collect variables.
     ------------------------------------
     INPUTS:
     ----
-    instrument     - The instrument which took the data (e.g. "MUSTANG-2")
+    instruments    - The instruments which took the data (e.g. "MUSTANG-2")
     name           - The name of the target (object) observed
     path           - The output directory
     testmode       - True or False; True uses few steps, so you test that the code works
@@ -53,38 +53,57 @@ def get_struct_of_variables(instruments,name,path='/home/romero/Results_Python/'
     
     ### Get data files and cluster/instrument specific variables:
     input_struct = importlib.import_module(name+'_info')
-    priors = input_struct.priors() # These are not fitting priors, but prior "known" (fixed) quantities.
-    dv = {}
+    priors = input_struct.priors()  # These are not fitting priors, but prior "known" (fixed) quantities.
+    shocks = input_struct.shocks()  # Needs to be defined...
+    bulk   = input_struct.bulk()    # Needs to be defined...
+    dv = {}              # Data-related variables (e.g. maps)
+    ifp= {}              # Individual fitting parameters (components to be treated individually).
+    # Minimum and maximum of angular scales "probed" by your instruments
+    minmax=np.array([30.0,30.0])*u.arcsec   # The minimum and maximum range you want your bins to cover
+    mycluster = cluster_defaults(priors)    # A class with cluster-specific attributes
+    nifp = 0                                # The number of individually-fitted parameters
+    
     for instrument in instruments:
         inputs = input_struct.files(instrument=instrument,map_file='nw_model')
         ### Now, we can get the input data variables
-        dv[instrument] = data_vars(inputs,priors)
-        
+        dv[instrument]  = data_vars(inputs,priors,mycluster)
+        ifp[instrument] = mfp.inst_fit_params(inputs)
+        minmax = angular_range(minmax,dv[instrument].fwhm,dv[instrument].FoV)
+        nifp += ifp[instrument].n_add_params
+
+    ### Need to convert bins defined in kpc to arcseconds...
     ### Now, as the fitting parameters depends on the input file, let's get those:
-    fit_params = mfp(dv,inputs,path=path,testmode=testmode)
+    cfp = mfp.common_fit_params(bins=bulk.bins,shbins=shocks.bins,path=path,
+                                shockgeo=shocks.geoparams,testmode=testmode,
+                                fbtemps=bulk.fbtemps,fstemps=shocks.fstemps,
+                                minmax=minmax,cluster=mycluster)
+    cfp.ndim += nifp            # A correction on the total number of dimensions
   
-    hk = housekeeping(dv,inputs,map_file=map_file)
+    hk = housekeeping(cfp,priors,instruments,name,mycluster)
     ### OK, now...can we collect other "defaults"
     ### Let's have a quick look at the data and see if we should be fitting
     ### a point source. If so, we'll update the fit parameters.
-    ufp = mfp.update_fit_params(dv,hk)
-    hk.fit_params = ufp # Maybe I want to update directly...
+    ### ufp = mfp.update_fit_params(dv,hk)
+    ### hk.fit_params = ufp # Maybe I want to update directly...
     
-    return hk,dv
+    return hk,dv,ifp
     
 class housekeeping:
 
-    def __init__(self,priors,fit_params,instruments):
-          
-        self.log = logbook()
-        self.hk_ins = inputs
-        self.fit_params = fit_params
-            
-        ### I should add variables regarding logs here
+    def __init__(self,cfp,priors,instruments,name,mycluster):
 
+        ### Here are the variables/classes that I put under the umbrella of "housekeeping":
+        self.log         = logbook()                     # Ideally take notes, keep track of what was done.
+        self.hk_ins      = priors                        # What is taken as known about this cluster?
+        self.instruments = instruments                   # The instruments that we use for this fitting
+        self.hk_outs     = hk_out(cfp,instruments,name)  # Some output variables (directories, filenames)
+        self.cfp         = cfp                           # Common Fit Parameters
+        self.cluster     = mycluster                     # A class with attributes of the cluster
+        self.av          = mad.all_astro()               # A class with (general) astronomical values.
+        
 class data_vars:
 
-    def __init__(self,inputs,priors,real=True,beta=0,betaz=0):
+    def __init__(self,inputs,priors,mycluster,real=True,beta=0,betaz=0):
         """
         I need to update this so that it reads in all the data (files) and then I can discard the
         input file information.
@@ -96,17 +115,30 @@ class data_vars:
         self.xferdims = inputs.tabdims
         tSZ,kSZ = rdi.get_sz_bp_conversions(priors.Tx,inputs.instrument,array="2",inter=False,
                                         beta=beta,betaz=betaz,rel=True)
-        self.av = mad.all_astro()  # av = astro vars
-        self.cluster=mcd.cluster(hk)
-### The optional input N (defaults to 120) may be something to change.../make more visible in "mapping": 
-        self.mapping = mcd.mapping(self.cluster,hk,hk.fit_params,self.av.mycosmo,
-                                   tSZ,kSZ,hk.hk_ins.instrument,sanche=sanche)
+        av = mad.all_astro()     # av = astro vars
+        self.mapping = mapping_info(mycluster,inputs,priors,av,tSZ,kSZ)
+        
+        self.tSZ = tSZ
+        self.kSZ = kSZ
+        fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = rdi.inst_params(inputs.instrument)
+        self.fwhm = fwhm
+        self.freq = freq
+        self.FoV  = FoV
         
 def print_attributes(myclass):
 
     attrs = vars(myclass)
     print ', '.join("%s" % item for item in attrs)
 
+def angular_range(minmax,fwhm,fov):
+
+    if fwhm < minmax[0]:
+        minmax[0] = fwhm
+    if fov > minmax[1]:
+        minmax[1] = fov
+
+    return minmax
+    
 class logbook:
 
     def __init__(self):
@@ -120,3 +152,166 @@ class logbook:
         self.shockresults=" NA" #
         self.blobresults =" NA" #
         self.miscresults =" NA" #
+
+class hk_out:
+
+    def __init__(self,fit_params,instruments,target):
+    
+        mlstr='ML-NO_'; ppstr='PP-NO_'; dtype='Virt_'; ubstr='POWER_'
+        instrument = "Combined"
+        pre_filename = "{}_Virt_".format(instrument)
+        if fit_params.real_data == True:   
+            dtype='Real_'; pre_filename = "{}_Real_".format(instrument)
+        if fit_params.pprior == True: ppstr='PP-YES_'
+        if fit_params.ubmap  == True: ubstr='UNIFORM_'         
+        #if fit_params.mn_lvl == True:
+        #    fit_params.ndim=fit_params.ndim+1
+        #    mlstr='ML-YES_'
+
+        #print_attributes(fit_params)
+        #import pdb;pdb.set_trace()
+
+        nbstr=str(fit_params.ndim)+"_Dim_"
+        nststr=str(fit_params.nsteps)+"S_"
+        nburnstr=str(fit_params.burn_in)+"B_"
+        walkstr=str(fit_params.nwalkers)+"W"
+        newfolder = time.strftime("%d%m_")+format(instrument)+'_'  #change as wanted
+        self.runstr=nbstr+dtype+nststr+nburnstr+mlstr+ppstr+ubstr+walkstr
+        self.nnfolder=newfolder+self.runstr
+        inst_path = r'{}/{}'.format(fit_params.path,instrument)
+        if not os.path.exists(inst_path):
+            os.makedirs(inst_path)     
+        clus_path = r'{}/{}'.format(inst_path,target)
+        if not os.path.exists(clus_path):
+            os.makedirs(clus_path)
+
+        self.newpath = clus_path
+        self.prefilename=pre_filename
+
+        
+class cluster_defaults:
+
+    def __init__(self,myinput=None,name="Unknown"):
+        """
+        Returns a structure with important variables related to the cluster parameters 
+        (which physically described the cluster), as well as parameters related to our
+        viewing of the cluster (e.g. angular diameter) that depend on cosmology.
+
+        Parameters
+        __________
+        name      - The name of the cluster
+        M_500     - The mass enclosed within R_500
+        z         - The redshift of the cluster
+        ra        - The Right Ascenscion (in hours or degrees; degrees preferred)
+        dec       - The Declination (in degrees)
+
+        Returns
+        -------
+        The structure cluster
+        """
+
+    ### Get general cosmological parameters:
+        
+        cosmo,mycosmo=mad.get_cosmology()
+        sz_constants=mad.get_sz_values()
+
+        if not(myinput == None):
+            z,ra,dec,M_500,Tx = myinput.z,myinput.ra,myinput.dec,\
+                                myinput.M_500,myinput.Tx
+            name = myinput.name
+        else:
+            z, ra, dec, M_500, Tx = clust_info(name) #myinput.name
+
+        H0 = mycosmo['H0']
+        h_70 = mycosmo['h_70'].value
+        self.name = name
+        self.z = z
+        self.E = (mycosmo['omega_m']*(1 + self.z)**3 + mycosmo['omega_l'])**0.5
+        self.H = H0 * self.E
+        self.dens_crit = (3 * (self.H)**2)/(8 * np.pi * const.G)
+        self.M_500 = M_500 * const.M_sun
+        self.P_500 =(1.65 * 10**-3) *((self.E)**(8./3)) *((
+            self.M_500 * h_70 )/((3*10**14)  * const.M_sun)
+            )**(2./3.)*(h_70)**2  *u.keV /u.cm**3
+        self.R_500 =(3 * self.M_500/(4 * np.pi  * 500 * self.dens_crit))**(1/3.)
+        self.R_500 = self.R_500.to(u.kpc)
+        self.R_max = 5 * self.R_500
+        self.d_a = cd.angular_diameter_distance(self.z, **cosmo) *u.Mpc
+        self.d_a = self.d_a.to("kpc") #convert to kpc (per radian)
+        self.scale = self.d_a*(u.arcsec).to("rad") / u.arcsec
+        self.theta_500 = (self.R_500 *u.rad/ self.d_a).to("arcmin")
+        self.theta_max = (self.R_max *u.rad /self.d_a).to("arcmin")
+        self.ra_deg=ra.to("deg")
+        self.dec_deg=dec
+        self.Tx = Tx
+
+class mapping_info:
+
+    def __init__(self,cluster,inputs,priors,mycosmo,tSZ,kSZ):
+        """
+        Returns a structure with important variables related to gridding a map.
+        In this sense, I have called it "astrometry", even though every variable
+        may not classically fit within astrometry.
+
+        Parameters
+        __________
+        cluster   - A structure, from the class/routing above in this file.
+        inputs    - Instrument-specific inputs
+        priors    - 
+        mycosmo   - A class with various cosmological parameters
+        tSZ       - A scalar that converts Compton y to Jy/beam for the given frequency
+        kSZ       - "" but for the kinetic SZ
+
+        Returns
+        -------
+        The structure mapping
+        """
+        ############################################################################################
+        ### First we do need to calculate a few variables
+        
+        #rintmax=cluster.R_500.value
+        #theta_min=(0.2 * u.arcsec).to("radian").value
+        #ltm=np.log10(theta_min/2.0)          # Log of Theta Min (radians)
+        ### Theta_max is already 5* R_500
+        #ltx=np.log10(cluster.theta_max.to("radian").value)  # Log of Theta Max (radians)
+        w = WCS(inputs.fitsfile)
+        x0,y0=w.wcs_world2pix(cluster.ra_deg,cluster.dec_deg,0)
+        image_data, ras, decs, hdr, pixs = rdi.get_astro(inputs.fitsfile)
+        theta_min=(pixs/2.0).to("radian").value
+        
+        xymap = mm.get_xymap(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))        # In arcseconds
+        arcmap = mm.get_radial_map(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))  # In arcseconds
+        x,y = xymap
+        angmap = np.arctan2(y,x)
+#        import pdb; pdb.set_trace()
+        radmap = (arcmap*u.arcsec).to("rad").value            # In radians
+        rmval = radmap; bi=np.where(rmval < theta_min); rmval[bi]=theta_min
+        radmap = rmval
+        ############################################################################################
+        ### And now we can put variables into our structure.
+        ######################################################### But first, another quick comment:
+        ### ltrmax = Log(Theta_Range)_max - for LTRMAX*R_500
+        ### Thus, the default is 5*R_500
+        #self.theta_min=theta_min
+        #self.theta_max= (15.0* u.arcmin).to("radian").value  # 15' in radians.
+        #self.theta_range = np.logspace(ltm,ltx+np.log10(ltrmax), N)
+        #self.theta_range = np.logspace(ltm,ltx, N)
+        self.w=w
+        self.ra=cluster.ra_deg
+        self.dec=cluster.dec_deg
+        self.pixsize=pixs
+        self.x0=x0
+        self.y0=y0
+        self.tSZ=tSZ
+        self.kSZ=kSZ
+        self.tab=rdi.get_xfer(inputs)
+        self.tabdims=inputs.tabdims     # Better to include this variable, if necessary
+        #self.r_bins=r_bins           # Need just the value (do not want a "quantity")
+        #self.a10_pressure = pressure # Need just the value (do not want a "quantity")        
+        self.radmap=radmap           # Need just the value (do not want a "quantity")
+        self.arcmap=arcmap
+        self.angmap=angmap
+        self.xymap=xymap
+        self.instrument=inputs.instrument
+
+        

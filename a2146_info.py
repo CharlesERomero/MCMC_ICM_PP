@@ -8,6 +8,16 @@ import astropy.units as u          # Install astropy
 ### This is only for MODELLING OF ABELL 2146!!! 
 ###############################################################################
 
+### CLASSES WHICH ARE USED BY OTHER ROUTINES:
+#
+# (1) files
+# (2) priors
+# (3) shocks
+#
+# That is... private_vars is only called within this routine, so that I (or you)
+# can organize have some presets if you need to look back on them later, but you'll
+# have to reformulate how they get used in the actual fitting code.
+
 class files:
 
     def __init__(self,instrument="MUSTANG2",map_file='nw_model'):
@@ -46,9 +56,23 @@ class files:
             self.tabformat = 'ascii'
             self.tabdims = '1D'
             self.tabextend = True    # Do we need to extent to higher k numbers?
-
+            self.calunc = 0.1      # 10% calibration accuracy.
+            self.fitptsrcs = True
+            self.fitmnlvl  = True
+            
         if instrument == "NIKA2":
 
+            self.calunc = 0.07      # 10% calibration accuracy.
+            self.fitptsrcs = True
+            self.fitmnlvl  = True
+            print 'This section not developed yet!'
+            import pdb; pdb.set_trace()
+            
+        if instrument == "BOLOCAM":
+
+            self.calunc = 0.05      # 10% calibration accuracy.
+            self.fitptsrcs = False
+            self.fitmnlvl  = False
             print 'This section not developed yet!'
             import pdb; pdb.set_trace()
             
@@ -66,11 +90,16 @@ class priors:
         self.dec= Angle('57d35m21.0754s')  # Degrees
         self.M_500 = 5.4e14                # Solar masses
         self.Tx = 5.6                      # keV
-
+        self.name='abell_2146'
+        
         ###  For when the time comes to use the *actual* coordinates for Abell 2146,
         ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
         ###  for the radius of curvature of the shocks.
 
+class private_vars:
+
+    def __init__(self):
+        
         A2146_ra    = Angle('15h56m08.9s'); A2146_dec    = Angle('66d21m21s')
         A2146_se_ra = Angle('15h56m07.1s'); A2146_se_dec = Angle('66d22m45s')
         A2146_nw_ra = Angle('15h56m08.5s'); A2146_nw_dec = Angle('66d21m35s')
@@ -105,7 +134,7 @@ class priors:
         self.miscfile3 = None # draining memory to do it like this.
         
         ###############################################################################
-        ### Bulk Profile
+        ### Bulk Profile (just for a a really simple model)
         
         self.rads = np.arange(11)*100.0 # 0 through 1 Mpc
         eden = np.arange(11); eden[0]=eden[1]; eden = 10**(-((eden-1.0)/5.0)**1.7)
@@ -115,11 +144,11 @@ class priors:
 
         
         ###############################################################################
-        ### Shock Profiles
+        ### Shock Profiles /// THESE ARE FOR YOUR OWN USE!!!
         
-        self.rads_se = np.array([450.0,498.0,650.0])  # Old values: [0.0,48.0,200.0]
-        self.eden_se = np.array([0.01,0.003,0.0008])
-        self.temp_se = np.array([2.8,10.5,7.0])        
+        self.rads_se = np.array([450.0,498.0,650.0])*u.kpc  # in kpc
+        self.eden_se = np.array([0.01,0.003,0.0008])  # cm**-3
+        self.temp_se = np.array([2.8,10.5,7.0])       # keV
 #        self.ealp_se = np.array([0.0,-0.29,-1.26])  # Actual values inferred from Russell+ 2012
         self.ealp_se = np.array([0.0,-0.29,-2.2]) # Force to have a steeper outer profile.
         self.talp_se = np.array([0.0,-0.1,-0.3])
@@ -129,18 +158,7 @@ class priors:
         self.lban_se = -np.pi
         self.uban_se = -np.pi/2.0
         
-#        self.rads_nw = np.array([0.0,250.0,500.0])
-#        self.eden_nw = np.array([0.001,0.001,0.001])
-#        self.temp_nw = np.array([10.0, 10.0, 10.0])
-#        self.ealp_nw = np.array([0.0,0.0,-3.0])
-#        self.talp_nw = np.array([0.0,0.0,0.0])
-#        self.angl_nw = (45.0*u.deg).to("radian").value
-#        self.opan_nw = 0.0
-#        self.shxi_nw = 0.0
-#        self.lban_nw = -np.pi
-#        self.uban_nw = np.pi
-
-        self.rads_nw = np.array([60.0,225.0,300.0])   # 0.0,165.0,240.0
+        self.rads_nw = np.array([60.0,225.0,300.0])*u.kpc   # 0.0,165.0,240.0
         self.eden_nw = np.array([0.0038,0.0038,0.0018])
         self.temp_nw = np.array([10.0, 16.5, 7.5])
 #        self.ealp_nw = np.array([-0.1,-0.2,-2.0]) # Actual values inferred from Russell+ 2012
@@ -152,6 +170,63 @@ class priors:
         self.lban_nw = 0
         self.uban_nw = np.pi/2.0
         
-        self.narm = True
+        self.narm = True # Normalize at R_min
         self.taper = 'normal'  #'inverse'
 
+class shocks:
+
+    def __init__(self):
+
+        geoparams1 = [0,0,0,1,1,1,0,0] # Spherical Geometry
+        mypriors = private_vars()
+        etemperature1 = mypriors.temp_nw
+        geoparams1[0] = mypriors.nw_x_off.to("arcsec").value
+        geoparams1[1] = mypriors.nw_y_off.to("arcsec").value
+        geoparams1[2] = mypriors.angl_nw;  geoparams1[6] = mypriors.shxi_nw
+        geoparams1[7] = mypriors.opan_nw;  kpc_rad1 = mypriors.rads_nw
+
+        geoparams2 = [0,0,0,1,1,1,0,0] # Spherical Geometry
+        etemperature2 = mypriors.temp_se;
+        geoparams2[0] = mypriors.se_x_off.to("arcsec").value
+        geoparams2[1] = mypriors.se_y_off.to("arcsec").value
+        geoparams2[2] = mypriors.angl_se;  geoparams2[6] = mypriors.shxi_se
+        geoparams2[7] = mypriors.opan_se;  kpc_rad2 = mypriors.rads_se
+
+### If you don't want to fit for shock components:
+        #self.geoparams=[]
+### Otherwise:
+        self.geoparams=[geoparams1,geoparams2]
+
+### If you don't want to use the prior-determined radii:
+        #self.bins=None
+### Else:
+        self.bins=[kpc_rad1,kpc_rad2]
+        self.fstemps=[False,False]
+        self.shockalp  = [np.zeros(len(kpc_rad1)),np.zeros(len(kpc_rad2))] # set
+        self.taper = ['normal','normal']
+        self.narm  = [True, True]  # Normalize at R_min
+
+
+class bulk:
+
+    def __init__(self):
+
+        geoparams = [0,0,0,1,1,1,0,0] # Spherical Geometry
+
+        self.geoparams=[geoparams]
+        ### You can specify the number of bins (as a LIST, as below):
+        self.bins = [6]      
+        ### Or, you can specify an array, which *MUST* then have units
+        ### attached to it.
+        #self.minarc = 2.0*u.arcsec
+        #self.maxarc = 
+        self.fbtemps = [False]
+        self.bulkalp  = np.zeros(self.bins) # set to zeros -> these will be "fit for".
+        self.narm  = [True]   # Normalize at R_min
+        self.taper = ['normal']   # A bit silly to have, but it's better...
+
+class ptsrc:
+
+    def __init__(self):
+
+        self.locs = []

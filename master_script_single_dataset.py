@@ -2,11 +2,16 @@
 ### VERSION HISTORY                                                     ###
 ###                                                                     ###
 ### Written 20 June 2017 by Charles Romero                              ###
+### Large revisions November 2017.                                      ###
+### ---> Recast many variables/classes                                  ###
+### ---> Allow multiple components to be fit                            ###
+### ---> Allow multiple data sets to be fit (simultaneaously)           ###
+### This revisions enter testing phase 11 Nov. 2017                     ###
 ###                                                                     ###
 ### PROJECTED REVISIONS:                                                ###
 ###                                                                     ###
 ### (1) Allow for point source CENTROID fitting.                        ###
-### (2) Have the PICKLE variable save working.                          ###
+### (2) Get PICKLE to work properly                                     ###
 ###                                                                     ###
 ###########################################################################
 ###                                                                     ###
@@ -17,29 +22,22 @@
 ###                                                                     ###
 ###########################################################################
 ############################### CER codes:  ###############################
-import collect_variables as cv     # Calls many other modules           ### 
-import max_like_fitting as mlf     # Some setup & running of emcee      ###
 import plot_mcmc_results as pmr    # Each plot is its own function.     ###
+import max_like_fitting as mlf     # Some setup & running of emcee      ###
+import collect_variables as cv     # Calls many other modules           ### 
 
 ########## Allow a few defaults / parameters to be set here: ##############
 instrument='MUSTANG2'; name='a2146'; savedir='/home/romero/Results_Python'
-tag='Re_'; sanche=False; testmode=False; map_type = 'se_model'
-
-if map_type == 'se_model':
-    nw=False; sector='se'
-if map_type == 'nw_model':
-    nw=True; sector='nw'
+tag='Re_'; testmode=False
 
 ################ Get parameters for fitting procedure: ####################
-hk,dv= cv.get_struct_of_variables(instrument,name,savedir,testmode=testmode,
-                                  sanche=sanche,map_type=map_type)
+hk,dv,ifp= cv.get_struct_of_variables([instrument],name,savedir,testmode=testmode)
 
 ####### Create another class with variables for running the fits: #########
-efv = mlf.emcee_fitting_vars(hk,dv,tag=tag,sanche=sanche,sector=sector)
-import pdb; pdb.set_trace()
+efv = mlf.emcee_fitting_vars(hk,dv,tag=tag)
 
 ####################### And now  run emcee! ###############################
-sampler,t_mcmc = mlf.run_emcee(hk,dv,efv)
+sampler,t_mcmc = mlf.run_emcee(hk,dv,ifp,efv)
 cv.print_attributes(sampler)
 
 ####### Compile some results, and save (i.e. shelve) the results! #########

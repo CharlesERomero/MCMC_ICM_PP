@@ -32,7 +32,7 @@ def inst_params(instrument):
         fwhm  = 9.0*u.arcsec
         smfw  = 10.0*u.arcsec
         freq  = 90.0*u.gigahertz # GHz
-        FoV   = 4.25*u.arcmin * (u.arcmin).to("arcsec")
+        FoV   = 4.25*u.arcmin 
         
     if instrument == "NIKA":
         fwhm1 = 8.7*2.0*u.arcsec  # arcseconds
@@ -42,7 +42,7 @@ def inst_params(instrument):
         fwhm  = 18.0*u.arcsec
         smfw  = 10.0*u.arcsec
         freq  = 150.0*u.gigahertz    # GHz
-        FoV   = 2.15*u.arcmin * (u.arcmin).to("arcsec")
+        FoV   = 2.15*u.arcmin 
         
     if instrument == "NIKA2":
         fwhm1 = 8.7*2.0*u.arcsec  # arcseconds
@@ -52,7 +52,7 @@ def inst_params(instrument):
         fwhm  = 18.0*u.arcsec
         smfw  = 10.0*u.arcsec
         freq  = 150.0*u.gigahertz    # GHz
-        FoV   = 6.5*u.arcmin * (u.arcmin).to("arcsec")
+        FoV   = 6.5*u.arcmin 
         
     if instrument == "BOLOCAM":
         fwhm1 = 8.7*7.0*u.arcsec  # arcseconds
@@ -167,39 +167,39 @@ def inst_bp(instrument,array="2"):
 
 class maps:
 
-    def __init__(self,hk):
+    def __init__(self,inputs):
      
-        data_map, header = fits.getdata(hk.hk_ins.fitsfile, header=True)
-        wt_map = fits.getdata(hk.hk_ins.wtfile,hk.hk_ins.wtext)
-        if hk.hk_ins.wtisrms == True: 
+        data_map, header = fits.getdata(inputs.fitsfile, header=True)
+        wt_map = fits.getdata(inputs.wtfile,inputs.wtext)
+        if inputs.wtisrms == True: 
             wt_map = wt_map**(-2.0)  # I'll need to account for zeros...
         self.data   = data_map
         self.header = header
         self.wts    = wt_map
-        if not(hk.hk_ins.psfile == None):
-            self.ptsrc,self.pshdr = fits.getdata(hk.hk_ins.psfile, header=True)
-        else:
-            self.ptsrc,self.pshdr = None,None
-        if not(hk.hk_ins.shfile == None):
-            self.shock,self.shhdr = fits.getdata(hk.hk_ins.shfile, header=True)
-        else:
-            self.shock,self.shhdr = None,None
-        if not(hk.hk_ins.blfile == None):
-            self.blob,self.blhdr = fits.getdata(hk.hk_ins.blfile, header=True)
-        else:
-            self.blob,self.blhdr = None,None
-        if not(hk.hk_ins.miscfile1 == None):
-            self.misc1,self.misc1hdr = fits.getdata(hk.hk_ins.miscfile1, header=True)
-        else:
-            self.misc1,self.mis1hdr = None,None
-        if not(hk.hk_ins.miscfile2 == None):
-            self.misc2,self.misc2hdr = fits.getdata(hk.hk_ins.miscfile2, header=True)
-        else:
-            self.misc2,self.mis2hdr = None,None
-        if not(hk.hk_ins.miscfile3 == None):
-            self.misc3,self.misc3hdr = fits.getdata(hk.hk_ins.miscfile3, header=True)
-        else:
-            self.misc3,self.mis3hdr = None,None
+#        if not(inputs.psfile == None):
+#            self.ptsrc,self.pshdr = fits.getdata(inputs.psfile, header=True)
+#        else:
+#            self.ptsrc,self.pshdr = None,None
+#        if not(inputs.shfile == None):
+#            self.shock,self.shhdr = fits.getdata(inputs.shfile, header=True)
+#        else:
+#            self.shock,self.shhdr = None,None
+#        if not(inputs.blfile == None):
+#            self.blob,self.blhdr = fits.getdata(inputs.blfile, header=True)
+#        else:
+#            self.blob,self.blhdr = None,None
+#        if not(inputs.miscfile1 == None):
+#            self.misc1,self.misc1hdr = fits.getdata(inputs.miscfile1, header=True)
+#        else:
+#            self.misc1,self.mis1hdr = None,None
+#        if not(inputs.miscfile2 == None):
+#            self.misc2,self.misc2hdr = fits.getdata(inputs.miscfile2, header=True)
+#        else:
+#            self.misc2,self.mis2hdr = None,None
+#        if not(inputs.miscfile3 == None):
+#            self.misc3,self.misc3hdr = fits.getdata(inputs.miscfile3, header=True)
+#        else:
+#            self.misc3,self.mis3hdr = None,None
 
 
 def get_sz_bp_conversions(temp,instrument,array="2",inter=False,beta=1.0/300.0,
@@ -356,6 +356,10 @@ def astro_from_hdr(hdr):
               dya*hdr['PC2_2']*hdr['CDELT2'] + hdr['CRVAL2']
         pixs= abs(hdr['PC1_1']*hdr['CDELT1'] * \
                   hdr['PC2_2']*hdr['CDELT2'])**0.5 * 3600.0
+
+    pixs = pixs*u.arcsec
+    ### Do I want to make ras and decs Angle objects??
+    ras  = ras*u.deg; decs = decs*u.deg 
     
     return ras, decs, pixs
 
