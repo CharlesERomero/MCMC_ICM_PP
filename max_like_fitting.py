@@ -1,11 +1,13 @@
 import numpy as np
 import emcee, os, shelve, pickle, time
+from astropy.io import fits
 import ellipsoidal_shells as es
 import instrument_processing as ip
 import astropy.units as u          # Install astropy
 from astropy.io import fits        # Install astropy
 import cluster_pressure_profiles as cpp     # Creates radius + pressure arrays.
 import rw_resultant_fits as rwrf   # Read/Wrte Resultant Fits
+rwrf=reload(rwrf)
 from scipy.interpolate import interp1d
 
 ########################################################################
@@ -22,7 +24,7 @@ from scipy.interpolate import interp1d
 
 class emcee_fitting_vars:
 
-    def __init__(self,hk,dv,tag=''):
+    def __init__(self,hk,dv,ifp,tag=''):
         """
         The attributes of this class are attributes that are needed for fitting models
         to the data. In particular, we want to assemble attributes (variables) which
@@ -37,6 +39,7 @@ class emcee_fitting_vars:
 
         myval=[]
         myalp=[]
+        sbepos=[]  # Boolean array indicating whether myval should be positive or not.
         ### Integral(P*dl) to Compton y (for dl given in radians):
         Pdl2y = (hk.av.szcu['thom_cross']*hk.cluster.d_a/hk.av.szcu['m_e_c2']).to("cm**3 keV**-1")
         R500 = (hk.cluster.R_500/hk.cluster.d_a).decompose()
@@ -44,6 +47,19 @@ class emcee_fitting_vars:
         tnx = [hk.cfp.bminmax[0].to("rad").value/20.0,10.0*R500.value] # In radians
         nb_theta_range = 150                   # The number of bins for theta_range
         theta_range = np.logspace(np.log10(tnx[0]),np.log10(tnx[1]), nb_theta_range)
+
+        ### Array of fitting values; the order of components are:
+        ### (1) mn lvl, (2) bulk, (3) shocks, (4) pt srcs, (5) "blobs"
+        ### Within each component, each instrument is addressed. [2] and [3]
+        ### are modelled jointly. Maybe I want to do the same with [5], depending
+        ### on the supposed physical origin.
+        
+        for myinst in hk.instruments:
+            if ifp[myinst].mn_lvl:
+                mnlvlguess = np.mean(dv[myinst].maps.data)
+                #import pdb;pdb.set_trace()
+                myval.append(mnlvlguess) # Append better for scalars
+                sbepos.extend([False])
         
         for bulkbins,fit_cen in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid):
             a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,bulkbins)
@@ -51,26 +67,32 @@ class emcee_fitting_vars:
             myval.extend(uless_p)
             myalp.extend(uless_p*0.0) # What if I want to use strict alphas??
             ### I need to play with centroids (updated how I do the following):
+            sbepos.extend(np.ones((len(uless_p)),dtype=bool))
             if fit_cen == True:
                 myval.extend([1.0,1.0]) # In particular, how much should I allow this to vary?
                 myalp.extend([0.0,0.0]) # In particular, how much should I allow this to vary?
                 # What units am I using for this?? (arcseconds? Pixel size? radians?)
-                
+                sbepos.extend([False,False])
+
         for shockbins in hk.cfp.shockbin:
             a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,shockbins)
             uless_p = (a10pres*Pdl2y).decompose().value
             myval.extend(uless_p)
             myalp.extend(uless_p*0.0) # What if I want to use strict alphas??
-
+            sbepos.extend(np.ones((len(uless_p)),dtype=bool))
+ 
+        ### I need to think a bit more about whether this is best or not.
         for myptsrc in hk.cfp.ptsrc:
             for myinst in hk.instruments:
-                if hk.ifp[myinst].fitptsrc == True:
-                    myval.extend(1.0) 
+                if ifp[myinst].pt_src == True:
+                    myval.extend([0.002]) # Estimate ~2 mJy?? for most point sources...to start.
+                    sbepos.extend([True]) # But really we found ~5 mJy for RXJ1347. WTF?
 
         for myblob in hk.cfp.blob:
             for myinst in hk.instruments:
-                if hk.ifp[myinst].fitblob == True:
+                if ifp[myinst].fitblob == True:
                     myval.extend([1.0,1.0,1.0]) 
+                    sbepos.extend([True,True,True])
 
         ### Some attributes for starting conditions / model creation.
         self.alphas  = myalp
@@ -79,6 +101,7 @@ class emcee_fitting_vars:
         self.thetamax= tnx[1]
         self.thetamin= tnx[0]
         self.Pdl2y   = Pdl2y
+        self.sbepos  = sbepos
         ### Some attributes for the results:
         self.t_mcmc  = 0.0       # Time that MCMC took.
         self.samples = None
@@ -86,13 +109,18 @@ class emcee_fitting_vars:
         self.psolns  = None
         self.values  = None
         self.errors  = None
+        ### I'm not sure if this is a good idea (for being more compact) or not.
+        ### I think it should be fine. (WRT ifp variable) 21 Feb 2018.
+        self.ifp     = ifp     # Carry around IFP within this class! 
+        self.paramdict ={}
         self.punits  = "keV cm**-3"
         self.runits  = "arcsec"
         self.tag = tag
         ######################################################################################
 
 def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,maps={},posind=0,
-                            fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True):
+                            fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
+                            finite=False):
 
     nbins = len(bins)        
     ulesspres = pos[posind:posind+nbins]
@@ -111,8 +139,9 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,map
     #import pdb;pdb.set_trace()
     
     if fullSZcorr == False:
+        #import pdb;pdb.set_trace()
         Int_Pres,outalphas,integrals = es.integrate_profiles(density_proxy, etemperature, geom,bins,
-                 efv.thetas,hk,dv,myalphas,beta=0.0,betaz=None,finite=False,narm=False,fixalpha=fixalpha,
+                 efv.thetas,hk,dv,myalphas,beta=0.0,betaz=None,finint=finite,narm=False,fixalpha=fixalpha,
                  strad=False,array="2",SZtot=False,columnDen=False,Comptony=True)
         yint=es.ycylfromprof(Int_Pres,efv.thetas,efv.thetamax) #
 
@@ -121,7 +150,7 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,map
         myinst = hk.instruments[i]; xymap=dv[myinst].mapping.xymap
         if fullSZcorr == True:
             IntProf,outalphas,integrals = es.integrate_profiles(density_proxy, etemperature, geom,bins,
-                 efv.thetas,hk,dv,myalphas,beta=0.0,betaz=None,finite=False,narm=False,fixalpha=fixalpha,
+                 efv.thetas,hk,dv,myalphas,beta=0.0,betaz=None,finint=finite,narm=False,fixalpha=fixalpha,
                  strad=False,array="2",SZtot=True,columnDen=False,Comptony=False)
             ### The following is not really correct. As this is under development, I'll leave it for later
             ### to solve.
@@ -150,10 +179,35 @@ def mk_twodgauss(pos,posind,centroid,hk,dv,maps={}):
 
     return maps
 
-def mk_ptsrc(pos,posind,centroid,hk,dv,maps={}):
+### Need to rewrite this to correctly deal with point source.
+def mk_ptsrc_v2(pos,posind,hk,dv,ifp,maps={}):
+
+    for index in range(len(hk.cfp.ptsrc)):
+        for myinst in hk.instruments:
+            ### Centroid is initially defined by RA, Dec.
+            if ifp[myinst].pt_src == True:
+                myflux  = pos[posind]
+                x,y     = dv[myinst].mapping.xymap            # Defined in arcseconds
+                fwhm    = dv[myinst].fwhm.to("arcsec").value  # Now this matches.
+                if hk.cfp.psfwhm[index] > fwhm:
+                    #print "Adjusted FWHM"
+                    fwhm = hk.cfp.psfwhm[index]
+                sigma   = fwhm/(2.0 * np.sqrt((2.0 * np.log(2.0))))
+                #import pdb; pdb.set_trace()
+                centroid= dv[myinst].mapping.ptsrclocs[index]
+                xcoord  = x - centroid[0];  ycoord=y - centroid[1]
+                mygauss = np.exp(((-(xcoord)**2 - (ycoord)**2) )/( 2.0 * sigma**2))
+                maps[myinst] += mygauss
+                posind += 1   # posind must be incremented for *each* instrument!
+        
+    return maps,posind
+
+### Need to rewrite this to correctly deal with point source.
+def mk_ptsrc(pos,posind,centroid,hk,dv,ifp,maps={}):
 
     for myinst in hk.instruments:
-        if hk.ifp[myinst].fitptsrc == True:
+        ### Centroid is initially defined by RA, Dec.
+        if ifp[myinst].pt_src == True:
             myflux  = pos[posind]
             x,y     = dv[myinst].mapping.xymap            # Defined in arcseconds
             fwhm    = dv[myinst].fwhm.to("arcsec").value  # Now this matches.
@@ -168,23 +222,28 @@ def mk_ptsrc(pos,posind,centroid,hk,dv,maps={}):
 def run_emcee(hk,dv,ifp,efv,init_guess=None):
 
 ##################################################################################
+### PSA / Reminder: EMCEE doesn't like it if the likelihood doesn't change much with respect
+### To how many data points are being used. Or something like that.
+    
     def lnlike(pos):                          ### emcee_fitting_vars
         posind = 0
         maps={}
+        ### I need to have it return a "pressure profile parameter list only" (15 Feb 2018)
         maps,yint,outalphas = make_skymodel_maps(pos,hk,dv,ifp,efv)
-        #import pdb;pdb.set_trace()
         ytotint = np.sum(yint) # I don't know how I would actually distinguish multiple yints...
         ycyl=ytotint*((hk.cluster.d_a.value/1000.0)**2) # Now in Mpc**-2 (should be a value of ~10 e-5)
         models = filter_maps(hk,dv,maps)
         loglike=0.0
+        #print 'LogLike initialized to zero'
         for myinst in hk.instruments:
             data    = dv[myinst].maps.data
-            weights = dv[myinst].maps.wts
+            weights = dv[myinst].maps.masked_wts       # Best to mask weights (not use the entire map!)
             model   = models[myinst]
             loglike-= 0.5 * (np.sum(((model - data)**2) * weights))
             ### If I choose to apply a mask:
             mask=np.where(weights > 0)
             gim=model[mask]; gid=data[mask]
+
 
         return loglike, outalphas,ycyl
 
@@ -200,22 +259,27 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
         #if hk.cfp.ptsrc == True:
         #    if len(hk.hk_ins.psfd) > 0:
 ### How do I want to deal with multiple point sources?
-#                import pdb; pdb.set_trace()
         #        pspr = hk.hk_ins.psfd[0]; psprunc = hk.hk_ins.psunc[0]
         #        plike += -0.5* (np.sum(((ptsrc_amp - pspr)**2)/(psprunc**2) ))
 
-        addlike=0.0           
-        if all([param > 0.0 for param in pos]) and (outalphas[-1] > 1.0):        
+        addlike=0.0; #prespos = pos[1:]
+        prespos = pos[efv.sbepos]
+        if all([param > 0.0 for param in prespos]) and (outalphas[-1] > 1.0):
+            #print 'Everything OK'
             return plike+addlike
+        print 'In LnPrior, LogLike set to infinity'
+        #import pdb;pdb.set_trace()
         return -np.inf
 
 ##################################################################################    
     def lnprob(pos):
         likel,outalphas,ycyl = lnlike(pos)
         if not np.isfinite(likel):
+            #print 'In LnProb, LogLike set to infinity'
             return -np.inf
         lp = lnprior(pos,outalphas,ycyl)
         if not np.isfinite(lp):
+            #print 'In LnProb, LogLike set to infinity'
             return -np.inf
         return lp + likel
 
@@ -223,6 +287,7 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
     t0 = time.time();    myargs = efv.pinit
     ndim = len(myargs)
     maps,yint,outalphas = make_skymodel_maps(myargs,hk,dv,ifp,efv)
+    print myargs
     import pdb;pdb.set_trace()
     pos = [(myargs + np.random.randn(ndim) * myargs/1e3) 
            for i in range(hk.cfp.nwalkers)]
@@ -235,7 +300,7 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
     
     t_mcmc = time.time() - t_premcmc
     print "MCMC time: ",t_mcmc
-    print "Input Pressures:", ulesspres
+    print "Initial Guesses: ", efv.pinit
     
     return sampler, t_mcmc
     
@@ -243,25 +308,36 @@ def make_skymodel_maps(pos,hk,dv,ifp,efv):
 
     posind = 0
     maps={}; yint=[]; outalphas=[]
+    # pressure terms.
     for myinst in hk.instruments:
         nx,ny = dv[myinst].mapping.radmap.shape
-        maps[myinst]=np.zeros((nx,ny))
+        maps[myinst]=np.zeros((nx,ny))+ pos[posind]
+        posind+=1
     
     ### Model the bulk pressure:
     for bins,fit_cen,geo,alp,narm in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulkgeo,
                                          hk.cfp.bulkalp,hk.cfp.bulknarm):
-        maps,posind,ynt,myalphas = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,maps,posind,
-                                              fixalpha=hk.cfp.bulkfix)
+        #print 'Bulk bins: ', bins
+        maps,posind,ynt,myalphas = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,
+                                                           maps,posind,fixalpha=hk.cfp.bulkfix)
         yint.append(ynt); outalphas.extend(myalphas)
         
     ### Model any shocks:
     for bins,fit_cen,geo,alp,narm in zip(hk.cfp.shockbin,hk.cfp.shoc_centroid,hk.cfp.shockgeo,
                                          hk.cfp.shockalp,hk.cfp.shocknarm):
-        maps,posind,shint,shout = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,maps,posind,
-                                                    fixalpha=hk.cfp.shockfix)
+        #print 'Shock Geometry is: ',geo
+        #print 'Shock bins: ',bins
+        maps,posind,shint,shout = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,
+                                                          maps,posind,fixalpha=hk.cfp.shockfix,
+                                                          finite=hk.cfp.shockfin)
+        #import pdb;pdb.set_trace()
+        
     ### Model any point sources (hk.cfp.ptsrc is a 2-tuple, the pt src. centroid):
-    for myptsrc in hk.cfp.ptsrc:
-        maps,posind = mk_ptsrc(pos,posind,myptsrc,hk,dv,maps)
+    #for myptsrc in hk.cfp.ptsrc:
+    #    maps,posind = mk_ptsrc(pos,posind,myptsrc,hk,dv,ifp,maps)
+
+    ### Let's try a second version
+    maps,posind = mk_ptsrc_v2(pos,posind,hk,dv,ifp,maps)
 
     ### Model any "blobs" (2D Gaussians):
     ### This is currently not functional because I'm not sure exactly how I want to implement
@@ -271,7 +347,7 @@ def make_skymodel_maps(pos,hk,dv,ifp,efv):
 
     ### Add any mean levels:
     ### (To be added)
-
+    
     return maps,yint,outalphas
 
 def filter_maps(hk,dv,maps):
@@ -327,15 +403,15 @@ def post_mcmc(sampler,t_mcmc,efv,hk,dv):
     efv.solns = np.array(map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),
                              zip(*np.percentile(efv.samples, [16, 50, 84],
                                                 axis=0))))
-    efv.psolns = (efv.solns/(efv.prmunit)).to(efv.punits)
+    efv.psolns = (efv.solns/(efv.Pdl2y)).to(efv.punits)
     #psolns = psolns.to("keV cm**-3")
-    efv.values = efv.psolns.value[0:hk.cfp.bins,0]
-    efv.errors = [efv.psolns.value[0:hk.cfp.bins,1],efv.psolns.value[0:hk.cfp.bins,2]]
+    efv.values = efv.psolns.value[:,0]
+    efv.errors = [efv.psolns.value[:,1],efv.psolns.value[:,2]]
     np.set_printoptions(precision=4)
-    rwrf.saveimg(dv,hk,efv,component='Bulk')
+    hdu = rwrf.saveimg(dv,hk,efv,component='Bulk')
 #    rwrf.saveimg(dv,hk,efv,component='Residual')
     
-    print "Unitless Pressure values from MCMC are:", efv.solns[0:hk.cfp.bins,0]
+    print "Unitless Pressure values from MCMC are:", efv.solns[:,0]
     print "Actual Pressure values from MCMC are:", efv.values
     savpik = os.path.join(hk.hk_outs.newpath,hk.hk_outs.nnfolder+'_pickle.sav')
     file = open(savpik,'w')
@@ -344,6 +420,9 @@ def post_mcmc(sampler,t_mcmc,efv,hk,dv):
     file.write(pickle.dumps(efv))
 #    file.write(pickle.dumps(sampler))
     file.close
+
+    return hdu
+    
 #############################################################################################
 
 def unpickle(file=None):
@@ -368,7 +447,7 @@ def get_initial_guess(pbins,uless_r,hk,conv=1.0):
     if hk.cfp.ndim > hk.cfp.bins:
         if hk.cfp.mn_lvl == True:
             vals=np.append(vals,0.01)
-        if hk.cfp.ptsrc == True:
+        if len(hk.cfp.ptsrc) > 0:      # I need to do this better (Feb 2018)
             vals=np.append(vals,0.01)
         if hk.cfp.blob == True:
             vals=np.append(vals,0.01)
@@ -377,7 +456,42 @@ def get_initial_guess(pbins,uless_r,hk,conv=1.0):
             
     return vals
 
-def get_best_map(efv,hk,dv):
+def get_best_comp_maps(efv,hk,dv,myinst,mycomponent,hdu):
+
+    tstr = 'Test_Run_'
+    #if hk.cfp.testmode == False:
+    #    tstr = 'Full_Run_'
+    tstr = hk.cfp.testmode+'_Run_'
+    
+    import pdb;pdb.set_trace()
+    modelsky={}
+    #for myinst in hk.instruments:
+    fbase=tstr+myinst+"_"
+    filename=tstr+"Residual.fits"
+    fullpath = os.path.join(hk.hk_outs.newpath,hk.hk_outs.prefilename+filename)
+    hdulist = fits.open(fullpath)
+    ########################### OVERRIDE 06 Feb 2018
+    myhdu = hdu[myinst]
+    hdulist = fits.HDUList(myhdu)
+
+    modelsky[myinst]=get_best_inst_comp_map(efv,hk,dv,mycomponent,myinst,hdulist)
+
+    return modelsky
+        
+def get_best_inst_comp_map(efv,hk,dv,mycomponent,myinst,hdulist):
+
+    for hdu in hdulist:
+        myext = hdu.header['EXTNAME']
+        print 'hi', myext.lower(), mycomponent.lower()
+        if myext.lower() == mycomponent.lower():
+            comp_map=hdu.data
+        #else:
+            #print 'hi', myext.lower(), mycomponent.lower()
+            #import pdb;pdb.set_trace()
+            
+    return comp_map
+    
+def old_get_best_map(efv,hk,dv):
 
     uless_fact = (efv.prmunit).to("cm**3 keV**-1").value
     uless_p = efv.values*uless_fact
@@ -409,7 +523,7 @@ def unpack_fit_params(pos,hk):
         if hk.cfp.mn_lvl == True:
             mnlvl_amp = pos[hk.cfp.bins+addind-1]
             addind+=1
-        if hk.cfp.ptsrc == True:
+        if len(hk.cfp.ptsrc) > 0:
             ptsrc_amp = pos[hk.cfp.bins+addind-1]
             addind+=1
         if hk.cfp.blob == True:

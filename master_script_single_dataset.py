@@ -19,6 +19,10 @@
 ### --> This has moved to the README.                                   ###
 ###                                                                     ###
 ###########################################################################
+### For 2600 steps, 24 walkers (and a burn-in of 600), and 8 parameters ###
+### the current runtime is very close to 12 hours. Conversely, for 300  ###
+### steps, 26 walkers, and 8 parameters, the code takes somewhere close ###
+### to 1.5 hours.                                                       ###
 ###                                                                     ###
 ###########################################################################
 ############################### CER codes:  ###############################
@@ -27,24 +31,25 @@ import max_like_fitting as mlf     # Some setup & running of emcee      ###
 import collect_variables as cv     # Calls many other modules           ### 
 
 ########## Allow a few defaults / parameters to be set here: ##############
-instrument='MUSTANG2'; name='a2146'; savedir='/home/romero/Results_Python'
-tag='Re_'; testmode=False
+instrument='MUSTANG2'; name='rxj1347_wshock'; savedir='/home/romero/Results_Python'
+tag='Re_9FWHM_v0_'; testmode='Burn'
+# Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
 ################ Get parameters for fitting procedure: ####################
 hk,dv,ifp= cv.get_struct_of_variables([instrument],name,savedir,testmode=testmode)
 
 ####### Create another class with variables for running the fits: #########
-efv = mlf.emcee_fitting_vars(hk,dv,tag=tag)
+efv = mlf.emcee_fitting_vars(hk,dv,ifp,tag=tag)
 
 ####################### And now  run emcee! ###############################
 sampler,t_mcmc = mlf.run_emcee(hk,dv,ifp,efv)
-cv.print_attributes(sampler)
+#cv.print_attributes(sampler)
 
 ####### Compile some results, and save (i.e. shelve) the results! #########
-mlf.post_mcmc(sampler,t_mcmc,efv,hk,dv)    
+hdu = mlf.post_mcmc(sampler,t_mcmc,efv,hk,dv)    
 
 ######################### Plot the results ################################
-pmr.plot_results(hk,dv,efv,sampler,overlay='input')
+pmr.plot_results(hk,dv,efv,sampler,hdu)
 import pdb; pdb.set_trace()
 
 ##################### Load and Plot the results ###########################

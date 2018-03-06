@@ -9,17 +9,18 @@ class common_fit_params:
 
     def __init__(self,bins=[6],shbins=[6],path='/home/romero/Results_Python/',
                  bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
-                 shockgeo=[],shocknarm=[True],shockalp=[],
-                 ptsrcs=[],blobs=[],
-                 fbtemps=[False],fstemps=[False],minmax=np.array([20.0,50.0])*u.arcsec,
-                 cluster=None,testmode=False,autodetect=False):
+                 shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
+                 ptsrcs=[],psfwhm=[],
+                 blobs=[],fbtemps=[False],fstemps=[False],
+                 minmax=np.array([20.0,50.0])*u.arcsec,
+                 cluster=None,testmode='Test',autodetect=False):
 
     ##################################################################################
     #####      Let's first prepare the bins for our bulk and shock components    #####
     ##################################################################################
 
-        bulkarc=[]
-        mygeo=[]
+        bulkarc = []
+        mygeo   = []
         geoparams=[0,0,0,1,1,1,0,0]
         totbins=0
         for mybins in bins:
@@ -56,6 +57,7 @@ class common_fit_params:
             if anotset:
                 shockalp.append(np.zeros(len(mybins)))
             totbins+=len(mybins)
+        myshbins = np.array(myshbins)    # This should work correctly now (05 Mar 2018)
                                     
     #########################################################################################
     #####  Now let's define some attributes for the common fitting parameter (class)    #####
@@ -73,10 +75,12 @@ class common_fit_params:
         self.fbtemps  = fbtemps    # Fit for bulk profile temperatures (if X-ray data is present)
         
         self.ptsrc    = ptsrcs     # Provide a list of centroids.
+        self.psfwhm   = psfwhm     # list of FWHM...if not truly point-like
         self.shockalp = shockalp   # Provide a list of shock log pressure slope
         self.shockgeo = shockgeo   # Provide a list of shock geometries
         self.shockbin = myshbins   # How many bins to use; OR, an array of bins positions.
         self.shocknarm= shocknarm  # set
+        self.shockfin = shockfin   # Do we do a finite integration (out to last bin)? (vs. infinite)
         self.shockfix = True       # Fix alphas for shock? By default, yes.
         self.fstemps  = fstemps    # Fit for shock profile temperatures (if X-ray data is present)
         self.trimOut  = True       # Trim outer (shock) shell.
@@ -100,7 +104,9 @@ class common_fit_params:
         self.path = path         # directory where figures are saved
         #### Num. of free dimensions
         #import pdb;pdb.set_trace()
-        self.ndim    = totbins + len(self.ptsrc) + len(self.blob)     
+        print totbins,len(self.ptsrc), len(self.blob)
+        ### I will need to add the blob stuff outside of this routine (20 Feb 2018)
+        self.ndim    = totbins + len(self.blob) #+ len(self.ptsrc)
 
 ### Some "advanced" features, which I hope to implement at some point
         self.bulk_centroid = [False]*len(bulkarc)    # Fit for a galaxy cluster centroid
@@ -109,14 +115,26 @@ class common_fit_params:
         self.blob_centroid = [False]*len(self.blob)  # Fit for the blob centroid
         self.testmode = testmode
 ### "Testing" values:
-        if testmode == False:
-            self.nwalkers= 30
+        ### Here is the longest I would think to do:
+        if testmode == 'Long':
+            self.nwalkers= self.ndim *3
+            self.nsteps  = 5000
+            self.burn_in = 100
+        ### And here is a test mode which really just verifies that the code will run.
+        elif testmode == 'Test':
+            self.nwalkers= self.ndim *2 + 10
+            self.nsteps  = 50
+            self.burn_in = 10
+        ### The following is designed to show the burn-in steps:
+        elif testmode == 'Burn':             
+            self.nwalkers= self.ndim *2 + 10
+            self.nsteps  = 1000
+            self.burn_in = 200
+        ### This can be the "standard" ("Full") run:
+        else:
+            self.nwalkers= self.ndim *3
             self.nsteps  = 2500
             self.burn_in = 500
-        else:
-            self.nwalkers= 20
-            self.nsteps  = 200
-            self.burn_in = 40
 
 
 #########################################################################################

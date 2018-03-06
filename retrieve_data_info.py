@@ -176,6 +176,14 @@ class maps:
         self.data   = data_map
         self.header = header
         self.wts    = wt_map
+        self.masked_wts = wt_map
+
+        if inputs.instrument == "MUSTANG" or inputs.instrument == "MUSTANG2":
+            keep=np.where(wt_map > np.max(wt_map)/2.0)
+            mask=np.where(wt_map < np.max(wt_map)/2.0)
+            gwts = wt_map[keep]
+            self.masked_wts[mask] = 0.0
+        
 #        if not(inputs.psfile == None):
 #            self.ptsrc,self.pshdr = fits.getdata(inputs.psfile, header=True)
 #        else:

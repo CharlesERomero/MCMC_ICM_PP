@@ -14,8 +14,7 @@ def get_xymap(map,pixsize,xcentre=[],ycentre=[]):
 
     """
 
-    
-    nx,ny=map.shape
+    ny,nx=map.shape
     ypix = pixsize.to("arcsec").value # Generally pixel sizes are the same...
     xpix = pixsize.to("arcsec").value # ""
     if xcentre == []:
@@ -23,8 +22,8 @@ def get_xymap(map,pixsize,xcentre=[],ycentre=[]):
     if ycentre == []:
         ycentre = ny/2.0
 
-    x = np.outer(np.arange(0,xpix*(nx), xpix)- xpix* xcentre, np.zeros(ny)+1.0)   
-    y = np.outer(np.zeros(nx) + 1.0, np.arange(0,ypix*(ny),ypix)- ypix * ycentre)
+    x = np.outer(np.zeros(ny)+1.0,np.arange(0,xpix*(nx), xpix)- xpix* xcentre)   
+    y = np.outer(np.arange(0,ypix*(ny),ypix)- ypix * ycentre, np.zeros(nx) + 1.0)
     return x,y
 
 def get_radial_map(map,pixsize,xcentre=[],ycentre=[]):

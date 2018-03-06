@@ -132,7 +132,7 @@ def prep_SZ_binsky(pressure, temp_iso, geoparams=None):
     return edensity, etemperature, geoparams
 
 def integrate_profiles(density_proxy, etemperature, geoparams,r_bins,theta_range,hk,dv,inalphas=[],
-                       beta=0.0,betaz=None,finite=False,narm=False,fixalpha=False,strad=False,
+                       beta=0.0,betaz=None,finint=False,narm=False,fixalpha=False,strad=False,
                        array="2",fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True):
     """
     Returns a surface brightness map for a binned profile fit, with far more generality than previously done.
@@ -151,7 +151,7 @@ def integrate_profiles(density_proxy, etemperature, geoparams,r_bins,theta_range
     inalphas      :  Nothing to see here. Move along.
     beta          :  Fraction of the speed of light of the cluster bulk (peculiar) motion.
     betaz         :  Fraction of the speed of light of the cluster along the line of sight.
-    finite        :  Integrate out to last finite (defined) bin.
+    finint        :  Integrate out to last finite (defined) bin.
     narm          :  Normalized at R_Min. This is important for integrating shells.
     fixalpha      :  Fix alpha (to whatever inalpha is); useful for shocks.
     strad         :  STrict RADii; if the pressure model has to obey strict placements of radii, use this!
@@ -183,8 +183,9 @@ def integrate_profiles(density_proxy, etemperature, geoparams,r_bins,theta_range
             vals[i] = tSZ*density_proxy[i]*etemperature[i] + kSZ*density_proxy[i]*dv.av.szcv["m_e_c2"]
 
     Int_Pres,alphas,integrals = analytic_shells(r_bins,vals,theta_range,alphas=inalphas,
-                                                shockxi=geoparams[6],finite=finite,narm=narm,
+                                                shockxi=geoparams[6],finite=finint,narm=narm,
                                                 fixalpha=fixalpha,strad=strad)
+    
     return Int_Pres,alphas,integrals
         
 def general_gridding(xymap,theta_range,r_bins,geoparams,finite=False,taper='normal',
@@ -225,7 +226,7 @@ def general_gridding(xymap,theta_range,r_bins,geoparams,finite=False,taper='norm
         mymap = grid_profile(theta_range, Int_Pres, xymap, geoparams=geoparams,myscale=1.0)
 
 ### 03 August 2017 - WTF?????
-    mymap = np.transpose(mymap)
+    ###mymap = np.transpose(mymap)
 
     return mymap
 
@@ -489,7 +490,7 @@ def analytic_shells(r_bins,vals,theta,correl=False,alphas=[],shockxi=0.0,fixalph
     if fixalpha == False:
         alphas = np.zeros(len(r_bins))
 
-    for idx, val in enumerate(r_bins):
+    for idx, myval in enumerate(r_bins):
         rin=mybins[idx]
         rout=mybins[idx+1]
         mypressure=vals[idx] # Gah, what a stupid way to do this.
@@ -535,7 +536,7 @@ def analytic_shock(r_bins,vals,alphas,theta,shockxi):
     nthetas = len(theta)
     integrals = np.zeros((len(r_bins),nthetas))
 
-    for idx, val in enumerate(r_bins):
+    for idx, myval in enumerate(r_bins):
         rin=mybins[idx]
         rout=mybins[idx+1]
         mypressure=vals[idx] # Gah, what a stupid way to do this.

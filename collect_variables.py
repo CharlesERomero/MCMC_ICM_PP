@@ -34,7 +34,7 @@ dandt = time.strftime("%d-%b-%Y %H:%M:%S")
 ###########################################################################
 
 def get_struct_of_variables(instruments,name,path='/home/romero/Results_Python/',
-                            testmode=False, map_file='nw_model'):
+                            testmode=False, map_file='all'):
 
     """
     This module is the overarching module to collect variables.
@@ -56,28 +56,36 @@ def get_struct_of_variables(instruments,name,path='/home/romero/Results_Python/'
     priors = input_struct.priors()  # These are not fitting priors, but prior "known" (fixed) quantities.
     shocks = input_struct.shocks()  # Needs to be defined...
     bulk   = input_struct.bulk()    # Needs to be defined...
+    ptsrcs = input_struct.ptsrc()   # Locations of point sources; not instrument-specific.
     dv = {}              # Data-related variables (e.g. maps)
     ifp= {}              # Individual fitting parameters (components to be treated individually).
     # Minimum and maximum of angular scales "probed" by your instruments
-    minmax=np.array([30.0,30.0])*u.arcsec   # The minimum and maximum range you want your bins to cover
-    mycluster = cluster_defaults(priors)    # A class with cluster-specific attributes
-    nifp = 0                                # The number of individually-fitted parameters
+    minmax=np.array([30.0,30.0])*u.arcsec  # The minimum and maximum range you want your bins to cover
+    mycluster = cluster_defaults(priors)   # A class with cluster-specific attributes
+    nifp = 0                               # The number of individually-fitted parameters
+    ninstptsrc = 0                         # The number of instruments for which to fit pt srcs.
     
     for instrument in instruments:
-        inputs = input_struct.files(instrument=instrument,map_file='nw_model')
+        inputs = input_struct.files(instrument=instrument,map_file='all')
         ### Now, we can get the input data variables
-        dv[instrument]  = data_vars(inputs,priors,mycluster)
+        dv[instrument]  = data_vars(inputs,priors,mycluster,ptsrcs)
         ifp[instrument] = mfp.inst_fit_params(inputs)
         minmax = angular_range(minmax,dv[instrument].fwhm,dv[instrument].FoV)
-        nifp += ifp[instrument].n_add_params
+        ### Mean levels figure into instrument-specific parameters.
+        nifp += ifp[instrument].n_add_params # Number of instrument-specific parameters 
+        if ifp[instrument].pt_src: ninstptsrc += 1
 
     ### Need to convert bins defined in kpc to arcseconds...
     ### Now, as the fitting parameters depends on the input file, let's get those:
     cfp = mfp.common_fit_params(bins=bulk.bins,shbins=shocks.bins,path=path,
-                                shockgeo=shocks.geoparams,testmode=testmode,
+                                shockgeo=shocks.geoparams,shockfin=shocks.shockfin,
+                                ptsrcs=ptsrcs.locs,psfwhm=ptsrcs.fwhm,testmode=testmode,
                                 fbtemps=bulk.fbtemps,fstemps=shocks.fstemps,
                                 minmax=minmax,cluster=mycluster)
-    cfp.ndim += nifp            # A correction on the total number of dimensions
+    # A correction on the total number of dimensions:
+    ### 20 Feb 2018 - This correction is true, but I had to make the common_fit_params
+    ### routine in-line with this!
+    cfp.ndim += nifp + ninstptsrc*len(cfp.ptsrc)   
   
     hk = housekeeping(cfp,priors,instruments,name,mycluster)
     ### OK, now...can we collect other "defaults"
@@ -103,7 +111,7 @@ class housekeeping:
         
 class data_vars:
 
-    def __init__(self,inputs,priors,mycluster,real=True,beta=0,betaz=0):
+    def __init__(self,inputs,priors,mycluster,ptsrcs,real=True,beta=0,betaz=0):
         """
         I need to update this so that it reads in all the data (files) and then I can discard the
         input file information.
@@ -116,7 +124,7 @@ class data_vars:
         tSZ,kSZ = rdi.get_sz_bp_conversions(priors.Tx,inputs.instrument,array="2",inter=False,
                                         beta=beta,betaz=betaz,rel=True)
         av = mad.all_astro()     # av = astro vars
-        self.mapping = mapping_info(mycluster,inputs,priors,av,tSZ,kSZ)
+        self.mapping = mapping_info(mycluster,inputs,priors,av,tSZ,kSZ,ptsrcs)
         
         self.tSZ = tSZ
         self.kSZ = kSZ
@@ -158,7 +166,11 @@ class hk_out:
     def __init__(self,fit_params,instruments,target):
     
         mlstr='ML-NO_'; ppstr='PP-NO_'; dtype='Virt_'; ubstr='POWER_'
-        instrument = "Combined"
+        if len(instruments) == 1:
+            instrument = instruments[0]
+        else:
+            instrument = "Combined"
+            
         pre_filename = "{}_Virt_".format(instrument)
         if fit_params.real_data == True:   
             dtype='Real_'; pre_filename = "{}_Real_".format(instrument)
@@ -247,7 +259,7 @@ class cluster_defaults:
 
 class mapping_info:
 
-    def __init__(self,cluster,inputs,priors,mycosmo,tSZ,kSZ):
+    def __init__(self,cluster,inputs,priors,mycosmo,tSZ,kSZ,ptsrcs):
         """
         Returns a structure with important variables related to gridding a map.
         In this sense, I have called it "astrometry", even though every variable
@@ -261,6 +273,7 @@ class mapping_info:
         mycosmo   - A class with various cosmological parameters
         tSZ       - A scalar that converts Compton y to Jy/beam for the given frequency
         kSZ       - "" but for the kinetic SZ
+        ptsrcs    - Point Source locations list of tuples: (RA, DEC)
 
         Returns
         -------
@@ -278,7 +291,7 @@ class mapping_info:
         x0,y0=w.wcs_world2pix(cluster.ra_deg,cluster.dec_deg,0)
         image_data, ras, decs, hdr, pixs = rdi.get_astro(inputs.fitsfile)
         theta_min=(pixs/2.0).to("radian").value
-        
+        #import pdb; pdb.set_trace()
         xymap = mm.get_xymap(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))        # In arcseconds
         arcmap = mm.get_radial_map(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))  # In arcseconds
         x,y = xymap
@@ -287,6 +300,13 @@ class mapping_info:
         radmap = (arcmap*u.arcsec).to("rad").value            # In radians
         rmval = radmap; bi=np.where(rmval < theta_min); rmval[bi]=theta_min
         radmap = rmval
+        ### OK, the point source locations need to be defined here (Feb. 19, 2018)
+        ptxys=[]
+        for myptsrc in ptsrcs.locs:
+            x1,y1=w.wcs_world2pix(myptsrc[0].to('deg'),myptsrc[1],0)
+            ptxys.append((x1,y1))
+            #import pdb;pdb.set_trace()
+
         ############################################################################################
         ### And now we can put variables into our structure.
         ######################################################### But first, another quick comment:
@@ -313,5 +333,7 @@ class mapping_info:
         self.angmap=angmap
         self.xymap=xymap
         self.instrument=inputs.instrument
+        ### OK, how do I define this?
+        self.ptsrclocs=ptxys
 
         
