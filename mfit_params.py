@@ -4,10 +4,12 @@ import find_ptsrc as fp
 import retrieve_data_info as rdi
 import astropy.units as u
 import numpy as np
+from os.path import expanduser
+myhome = expanduser("~")
 
 class common_fit_params:
 
-    def __init__(self,bins=[6],shbins=[6],path='/home/romero/Results_Python/',
+    def __init__(self,bins=[6],shbins=[6],path=myhome'/Results_Python/',
                  bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
                  shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
                  ptsrcs=[],psfwhm=[],

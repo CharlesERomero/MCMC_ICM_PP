@@ -10,6 +10,8 @@ import mapping_modules as mm       # Creates radius + pressure arrays.
 import mfit_params as mfp          # Loads parameters for fitting procedure
 import importlib,time,os
 from astropy.wcs import WCS
+from os.path import expanduser
+myhome = expanduser("~")
 
 today=time.strftime("%d%b%Y")
 todaysp=time.strftime("%d %b %Y")
@@ -33,7 +35,7 @@ dandt = time.strftime("%d-%b-%Y %H:%M:%S")
 ###                                                                     ###
 ###########################################################################
 
-def get_struct_of_variables(instruments,name,path='/home/romero/Results_Python/',
+def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
                             testmode=False, map_file='all'):
 
     """

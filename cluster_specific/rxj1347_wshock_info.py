@@ -3,6 +3,8 @@ from astropy.coordinates import SkyCoord
 #from astropy.coordinates import separation
 import numpy as np
 import astropy.units as u          # Install astropy
+from os.path import expanduser
+myhome = expanduser("~")
 
 ###############################################################################
 ### This is only for MODELLING OF ABELL 2146!!! 
@@ -18,6 +20,11 @@ import astropy.units as u          # Install astropy
 # can organize have some presets if you need to look back on them later, but you'll
 # have to reformulate how they get used in the actual fitting code.
 
+######################################################
+### Let's list all directories by instrument:
+m2dir = "/home/data/MUSTANG2/"
+
+
 class files:
 
     def __init__(self,instrument="MUSTANG2",map_file='all'):
@@ -31,10 +38,10 @@ class files:
             self.name='rxj1347'
 #############################################################
             if map_file == 'noise':
-                self.indir= "/home/data/MUSTANG2/AGBT17_Products/RXJ1347/"
+                self.indir= m2dir+"AGBT17_Products/RXJ1347/"
                 self.fitsfile=self.indir+"pca7_f0.09_noise.fits"
             if map_file == 'all':
-                self.indir= "/home/data/MUSTANG2/AGBT17_Products/RXJ1347/"
+                self.indir= m2dir+"AGBT17_Products/RXJ1347/"
                 self.fitsfile=self.indir+"pca7_f0.09_map.fits"
 #############################################################
             self.wtfile=self.fitsfile # It's in the same file; just a different extension.
@@ -45,7 +52,6 @@ class files:
             ### Here's what I need to know about the transfer function format:
             ### If there are issues, please see code XYZ
 
-            m2dir = "/home/data/MUSTANG2/"
             #self.tabfile = m2dir+"Template_M2_xfer_fxn_srcsz_210.txt"
             self.tabfile = m2dir+"AGBT17_Products/pca7_f0.09_onHSC_2.txt"
             self.tabcomments='#'

@@ -29,9 +29,11 @@
 import plot_mcmc_results as pmr    # Each plot is its own function.     ###
 import max_like_fitting as mlf     # Some setup & running of emcee      ###
 import collect_variables as cv     # Calls many other modules           ### 
+from os.path import expanduser
+myhome = expanduser("~")
 
 ########## Allow a few defaults / parameters to be set here: ##############
-instrument='MUSTANG2'; name='rxj1347_wshock'; savedir='/home/romero/Results_Python'
+instrument='MUSTANG2'; name='rxj1347_wshock'; savedir=myhome+'/Results_Python'
 tag='Re_9FWHM_v0_'; testmode='Burn'
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 

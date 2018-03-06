@@ -9,6 +9,8 @@ import cluster_pressure_profiles as cpp     # Creates radius + pressure arrays.
 import rw_resultant_fits as rwrf   # Read/Wrte Resultant Fits
 rwrf=reload(rwrf)
 from scipy.interpolate import interp1d
+from os.path import expanduser
+myhome = expanduser("~")
 
 ########################################################################
 ### Some *bugs* that had to be fixed:
@@ -427,7 +429,7 @@ def post_mcmc(sampler,t_mcmc,efv,hk,dv):
 
 def unpickle(file=None):
 
-    sdir ='/home/romero/Results_Python/MUSTANG2/a2146/'
+    sdir =myhome+'/Results_Python/MUSTANG2/a2146/'
     file=sdir+'2707_MUSTANG2_6_B_Real_2500S_500B_ML-NO_PP-NO_POWER_30W_pickle.sav'
     rdfl = open(file,'r')
     my_dv = pickle.load(rdfl)
