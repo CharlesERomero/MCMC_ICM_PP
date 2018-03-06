@@ -9,7 +9,7 @@ myhome = expanduser("~")
 
 class common_fit_params:
 
-    def __init__(self,bins=[6],shbins=[6],path=myhome'/Results_Python/',
+    def __init__(self,bins=[6],shbins=[6],path=myhome+'/Results_Python/',
                  bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
                  shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
                  ptsrcs=[],psfwhm=[],
