@@ -34,14 +34,14 @@ myhome = expanduser("~")
 
 ########## Allow a few defaults / parameters to be set here: ##############
 instrument='MUSTANG2'; name='rxj1347_wshock'; savedir=myhome+'/Results_Python'
-tag='Re_9FWHM_v0_'; testmode='Burn'
+tag='Re_9FWHM_v0_'; testmode='Test'; nthreads=1
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
 ################ Get parameters for fitting procedure: ####################
 hk,dv,ifp= cv.get_struct_of_variables([instrument],name,savedir,testmode=testmode)
 
 ####### Create another class with variables for running the fits: #########
-efv = mlf.emcee_fitting_vars(hk,dv,ifp,tag=tag)
+efv = mlf.emcee_fitting_vars(hk,dv,ifp,tag=tag,nthreads=nthreads)
 
 ####################### And now  run emcee! ###############################
 sampler,t_mcmc = mlf.run_emcee(hk,dv,ifp,efv)
