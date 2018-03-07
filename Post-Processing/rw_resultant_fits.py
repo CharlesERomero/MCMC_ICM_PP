@@ -46,9 +46,11 @@ def make_and_save_model_maps(hk,dv,efv):
    
     
     tstr = 'Test_Run_'
-    if hk.cfp.testmode == False:
-        tstr = 'Full_Run_'
+    #if hk.cfp.testmode == False:
+    #    tstr = 'Full_Run_'
+    tstr = hk.cfp.testmode+'_Run_'
 
+    
     for myinst in hk.instruments:
         ### Set up the necessary variables for the model map(s) of each instrument
         nx,ny = dv[myinst].mapping.radmap.shape
@@ -79,7 +81,6 @@ def make_and_save_model_maps(hk,dv,efv):
         maps.append(outmaps)
         yint.append(ynt); outalphas.extend(myalphas)
         conc_hdu(dv,hk,maps[mapind],title='Bulk',hdu=hdu,count=count); mapind+=1
-        print 'hi'
         clear_maps(zeromaps,hk,dv)
         
     ### Model any shocks:
@@ -142,7 +143,7 @@ def conc_hdu(dv,hk,modelsky,title='Unknown',hdu={},count=1):
             hdu0.header.append(("Target",hk.hk_ins.name))          
             hdu0.name = 'Weights'
 
-            print modelsky[mykey].shape, len(modelsky),np.min(modelsky[mykey]),np.max(modelsky[mykey])
+            #print modelsky[mykey].shape, len(modelsky),np.min(modelsky[mykey]),np.max(modelsky[mykey])
             
             hdu1 = fits.ImageHDU(modelsky[mykey])
             hdu1.header = dv[mykey].mapping.w.to_header()
@@ -168,7 +169,7 @@ def conc_hdu(dv,hk,modelsky,title='Unknown',hdu={},count=1):
 
         count+=1
         hdu[mykey]=myhdu
-        print len(myhdu)
+        #print len(myhdu)
 
 def write_hdu_to_fits(hk,tstr,hdu):
 

@@ -28,7 +28,8 @@ def plot_res_no_sampler(hk,dv,efv,overlay=None):
     plot_correlations(pres_samples,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr)
     maxlikesky=mlf.get_best_comp_maps(efv,hk,dv)
     import pdb;pdb.set_trace()
-    plot_best_bulk(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
+    plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
+##########################################################################
 
 def plot_results(hk,dv,efv,sampler,hdu,overlay=None):
 
@@ -66,7 +67,9 @@ def plot_results(hk,dv,efv,sampler,hdu,overlay=None):
         pres_samples = ((efv.samples/(efv.Pdl2y)).to(efv.punits)).value # In keV cm**-3
         plot_correlations(pres_samples,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr)
         maxlikesky=mlf.get_best_comp_maps(efv,hk,dv,myinst,"bulk"+str(ibulk+1),hdu)
-        plot_best_bulk(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
+        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
+        maxlikesky=mlf.get_best_comp_maps(efv,hk,dv,myinst,"shock"+str(ibulk+1),hdu)
+        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
 
 def plot_steps(sampler,fit_params,newpath,pre_filename):
     stepmap = plt.figure(1)
@@ -93,7 +96,7 @@ def plot_steps(sampler,fit_params,newpath,pre_filename):
 def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None,count=1,
                    component='Bulk'):
 
-    fit_params=hk.cfp; plt.figure(2);    plt.clf()
+    fit_params=hk.cfp; plt.figure(2,figsize=(20,12));    plt.clf()
     if inst == None:
         inst=hk.instruments[0]
 
@@ -170,22 +173,24 @@ def plot_correlations(samples,newpath, pre_filename):
     fullpath = os.path.join(newpath, pre_filename+filename)
     plt.savefig(fullpath)
 
-def plot_best_bulk(maxlikesky,newpath, pre_filename,dv,count=1):
+def plot_best_sky(maxlikesky,newpath, pre_filename,dv,mycomp="bulk",count=1):
 
     mapaxisunits="arcsec"   #...Should add as a keyword
+    mapunits="Jy/Beam"
     for key in maxlikesky:
         instrument=key
         plt.figure(2)
         plt.clf()
         plt.imshow(maxlikesky[key]) # May want to add "extent"
-        plt.title("Model Compton y")
+#        plt.title("Model Compton y")
+        plt.title("Unfiltered "+mycomp+" model ("+mapunits+")")
         #plt.xlabel("arcsec")
         #plt.ylabel("arcsec")
         plt.xlabel(mapaxisunits)
         plt.ylabel(mapaxisunits)
         cbar = plt.colorbar() 
-        cbar.set_label('mJy / beam')
-        filename = "flux_density_skymodel.png"
+        cbar.set_label(mapunits)
+        filename = "flux_density_"+mycomp+"_skymodel.png"
         fullpath = os.path.join(newpath, pre_filename+filename)
         plt.savefig(fullpath)
 
@@ -196,14 +201,14 @@ def plot_best_bulk(maxlikesky,newpath, pre_filename,dv,count=1):
         plt.figure(2)
         plt.clf()
         plt.imshow(gc_model) # May want to add "extent"
-        plt.title("Model Compton y")
+        plt.title("Filtered "+mycomp+" model ("+mapunits+")")
         #plt.xlabel("arcsec")
         #plt.ylabel("arcsec")
         plt.xlabel(mapaxisunits)
         plt.ylabel(mapaxisunits)
         cbar = plt.colorbar() 
-        cbar.set_label('mJy / beam')
-        filename = "flux_density_filtered.png"
+        cbar.set_label(mapunits)
+        filename = "flux_density_"+mycomp+"_filtered.png"
         fullpath = os.path.join(newpath, pre_filename+filename)
         plt.savefig(fullpath)
         

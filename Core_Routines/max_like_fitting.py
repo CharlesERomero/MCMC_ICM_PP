@@ -1,17 +1,20 @@
-import numpy as np
-import emcee, os, shelve, pickle, time
-from astropy.io import fits
-import ellipsoidal_shells as es
-import instrument_processing as ip
-import astropy.units as u          # Install astropy
-from astropy.io import fits        # Install astropy
-import cluster_pressure_profiles as cpp     # Creates radius + pressure arrays.
-import rw_resultant_fits as rwrf   # Read/Wrte Resultant Fits
-rwrf=reload(rwrf)
-from scipy.interpolate import interp1d
-from os.path import expanduser
-myhome = expanduser("~")
+import numpy as np                      # A useful package...
+import emcee, os, shelve, pickle, time  # A list of modules to import as-is
+from astropy.io import fits             # To read/write fits
+import ellipsoidal_shells as es         # Integrates ellipsoidal power law distributions
+import instrument_processing as ip      # Determines instrument-specific values (e.g. xfer fxn)
+import astropy.units as u               # Allows variables (quantities) to have units
+import cluster_pressure_profiles as cpp # Creates radius + pressure arrays.
+import rw_resultant_fits as rwrf        # Read/Wrte Resultant Fits
+from scipy.interpolate import interp1d  # 1-dimensional interpolation (for the integrated profiles)
+from os.path import expanduser          # A way to determine what the home directory is
+import multiprocessing                  # A way to determine how many cores the computer has
+rwrf=reload(rwrf)                       # Reload - primarily of use during development of code.
+myhome = expanduser("~")                # What is the user's home directory?
+ncpus  = multiprocessing.cpu_count()    # One can decide how aggressively to parallel process.
 
+########################################################################
+### March 6, 2018. I think the following bugs are fixed.
 ########################################################################
 ### Some *bugs* that had to be fixed:
 ### (1) We need to be sure that theta_range (dv.mapping.theta_range) encompasses the
@@ -23,10 +26,13 @@ myhome = expanduser("~")
 ###     large wavenumber k)
 ###
 ########################################################################
+### TO DO:
+### (1) Document (comment) this and other codes.
+########################################################################
 
 class emcee_fitting_vars:
 
-    def __init__(self,hk,dv,ifp,tag=''):
+    def __init__(self,hk,dv,ifp,tag='',nthreads=1):
         """
         The attributes of this class are attributes that are needed for fitting models
         to the data. In particular, we want to assemble attributes (variables) which
@@ -111,6 +117,7 @@ class emcee_fitting_vars:
         self.psolns  = None
         self.values  = None
         self.errors  = None
+        self.nthreads= np.min([nthreads,ncpus])     # Number of threads to run over with emcee.
         ### I'm not sure if this is a good idea (for being more compact) or not.
         ### I think it should be fine. (WRT ifp variable) 21 Feb 2018.
         self.ifp     = ifp     # Carry around IFP within this class! 
@@ -297,8 +304,15 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
 #pos must be shape(nwalkers, ndim)
     t_premcmc = time.time()
     sampler = emcee.EnsembleSampler(hk.cfp.nwalkers, hk.cfp.ndim,
-                                    lnprob, threads = 1)
-    sampler.run_mcmc(pos,hk.cfp.nsteps)
+                                    lnprob, threads = efv.nthreads)
+    print "Running emcee on ",efv.nthreads," threads."
+    for i, result in enumerate(sampler.sample(pos, iterations=hk.cfp.nsteps)):
+    #    print i
+        if (i+1) % 10 == 0:
+            print "{0:5.1%}".format(float(i) / hk.cfp.nsteps)
+            
+    #import pdb;pdb.set_trace()
+    #sampler.run_mcmc(pos,hk.cfp.nsteps)
     
     t_mcmc = time.time() - t_premcmc
     print "MCMC time: ",t_mcmc
@@ -465,7 +479,7 @@ def get_best_comp_maps(efv,hk,dv,myinst,mycomponent,hdu):
     #    tstr = 'Full_Run_'
     tstr = hk.cfp.testmode+'_Run_'
     
-    import pdb;pdb.set_trace()
+    #import pdb;pdb.set_trace()
     modelsky={}
     #for myinst in hk.instruments:
     fbase=tstr+myinst+"_"
@@ -484,7 +498,7 @@ def get_best_inst_comp_map(efv,hk,dv,mycomponent,myinst,hdulist):
 
     for hdu in hdulist:
         myext = hdu.header['EXTNAME']
-        print 'hi', myext.lower(), mycomponent.lower()
+        #print 'hi', myext.lower(), mycomponent.lower()
         if myext.lower() == mycomponent.lower():
             comp_map=hdu.data
         #else:
