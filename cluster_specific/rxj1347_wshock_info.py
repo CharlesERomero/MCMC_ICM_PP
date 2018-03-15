@@ -118,12 +118,12 @@ class shocks:
         ###              Taper scaling (power law), Opening Angle]
         ### NOTE: If Taper scaling (geoparams[6]) is 0, then no tapering is applied
         geoparams = [0,0,0,1,1,1,0,0] # Spherical Geometry
-        rxjshock  = [0,0,3.75,1,1,1,0,0.7]   # Angles specified in radians!!!
+        rxjshock  = [0,0,3.53,1,1,1,0,0.8]   # Angles specified in radians!!!
         ### 3.75 radians = angle of shock  (SW)
         ### 0.7 radians  = opening angle
 
         ### For RXJ1347, 1" ~ 6 kpc, so 60 kpc bins ~ 10" is well matched to our beam.
-        mybins = np.array([60.0,120.0,180.0,240.0])*u.kpc
+        mybins = np.array([60.0,120.0,180.0,240.0,300.0])*u.kpc
         
 ### If you don't want to fit for shock components:
 #        self.geoparams = []                       # Array of geometric parameters

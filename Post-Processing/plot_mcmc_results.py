@@ -245,7 +245,7 @@ def plot_best_sky(maxlikesky,newpath, pre_filename,dv,mycomp="bulk",count=1):
 
     #### End of loop.
 
-def plot_sky_map(fullpath,image,title,mapaxisunits,mapunits,format=format):
+def plot_sky_map(fullpath,image,title,mapaxisunits,mapunits,format='png'):
 
     plt.figure(2,figsize=(20,12));        plt.clf()
     plt.imshow(image) # May want to add "extent"

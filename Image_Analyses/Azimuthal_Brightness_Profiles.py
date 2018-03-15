@@ -197,8 +197,8 @@ def get_two_slices(dv,hk,angmin,angmax):
 
 def iter_two_slices(dv,hk,myformat='png'):
 
-    angmin = np.arange(3.0*np.pi/4.0, 5.0*np.pi/4.0, np.pi/8.0)  # steps of 22.5 degrees
-    angmax = np.arange(5.0*np.pi/4.0, 7.0*np.pi/4.0, np.pi/8.0)  # steps of 22.5 degrees
+    angmin = np.arange(15.0*np.pi/18.0, 19.0*np.pi/18.0, np.pi/18.0)  # steps of 22.5 degrees
+    angmax = np.arange(24.0*np.pi/18.0, 30.0*np.pi/18.0, np.pi/18.0)  # steps of 22.5 degrees
     mylist=[]; aminarr = []; amaxarr=[]
     radunits = 'arcseconds' # This is in fact, hard-coded into my xymaps
     myinst='MUSTANG2'
@@ -206,10 +206,13 @@ def iter_two_slices(dv,hk,myformat='png'):
     
     fig, ax, fullpath = myplotsetup(radunits=radunits,profunits=profunits,format=myformat)
     linestyles = ['-','--','-.',':']
-    markers    = ['o','*','+','D']
+    dashlist   = [(100,1),(3,3),(5,2,20,2),(5,2),(4,10),(1,10)]
+    markers    = ['o','*','+','D','s','v']
+    #import pdb;pdb.set_trace()
     
     for i,thisamin in enumerate(angmin):
-        linestyle = linestyles[i]
+        #linestyle = linestyles[i]   # Old thing to pass to quick_plot_two_slices
+        dashtup   = dashlist[i]     # New thing
         for j,thisamax in enumerate(angmax):
             marker = markers[j]
             profsl = get_two_slices(dv,hk,thisamin,thisamax)
@@ -217,7 +220,7 @@ def iter_two_slices(dv,hk,myformat='png'):
             aminarr.append(thisamin)
             amaxarr.append(thisamax)
             #kwargs=[linestyle,marker]
-            kwargs={'linestyle':linestyle,'marker':marker,'offset':j}
+            kwargs={'linestyle':dashtup,'marker':marker,'offset':j}
             quick_plot_two_slices(fig,ax,profsl,**kwargs)
 
     plt.legend()
@@ -234,13 +237,14 @@ def quick_plot_two_slices(fig,ax,profsl,**kwargs):
         name1    = "{:5.2f}".format(myslices[0].maxangle)
         mylabel  = name0+'_to_'+name1
         ax.plot(myslices[0].rads+offset,myslices[0].profavg,label=mylabel,color='g',
-                 linestyle=myls,marker=myma,markersize=10.0)
-        name0    = "{:5.2f}".format(myslices[1].minangle)
-        name1    = "{:5.2f}".format(myslices[1].maxangle)
-        mylabel  = name0+'_to_'+name1
+                 dashes=myls,marker=myma,markersize=10.0)
+        #name0    = "{:5.2f}".format(myslices[1].minangle)
+        #name1    = "{:5.2f}".format(myslices[1].maxangle)
+        #mylabel  = name0+'_to_'+name1
         #print myslices[1].npix[10]
-        ax.plot(myslices[1].rads+offset,myslices[1].profavg,label=mylabel,color='r',
-                 linestyle=myls,marker=myma,markersize=10.0)
+        ############### ,label=mylabel,linestyle=myls
+        ax.plot(myslices[1].rads+offset,myslices[1].profavg,color='r',
+                 dashes=myls,marker=myma,markersize=10.0)
 
 
 def myplotsetup(thispath=newpath,prefilename='Testing_2slice_profiles_',filename='v0.',
