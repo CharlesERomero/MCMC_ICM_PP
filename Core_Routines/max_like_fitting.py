@@ -317,7 +317,7 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
         if all([param > 0.0 for param in prespos]) and (outalphas[-1] > 1.0):
             #print 'Everything OK'
             return plike+addlike
-        print 'In LnPrior, LogLike set to infinity ', outalphas[-1]
+        #print 'In LnPrior, LogLike set to infinity ', outalphas[-1]
         #import pdb;pdb.set_trace()
         return -np.inf
 
