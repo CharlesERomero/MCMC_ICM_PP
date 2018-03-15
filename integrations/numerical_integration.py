@@ -6,11 +6,16 @@ import ellipsoidal_shells as es
 import os
 import retrieve_data_info as rdi
 
-def int_profile(profrad, profile,radProjected):
+def int_profile(profrad, profile,radProjected,zmax=0):
     """
     This currently only integrates out to the max of profrad. If you want
-    to give a *fixed z*, you should b e sure it is LESS THAN the max of
+    to give a *fixed z*, you should be sure it is LESS THAN the max of
     profrad, and then adjust the code below.
+
+    You likely want profrad to be in kpc. In this way, you will integrate
+    units of pressure over kpc, and the resultant units are comprehensible.
+
+    radProjected is an array of z-coordinates along the line of sight.
     """
     
     nrP = len(radProjected); nPr=len(profrad)
@@ -19,6 +24,9 @@ def int_profile(profrad, profile,radProjected):
     rad = np.sqrt(x**2 + z**2)
     fint = interp1d(profrad, profile, bounds_error = False, fill_value = 0)
     radProfile = fint(rad.reshape(nrP*nPr))
+    if zmax > 0:
+        zre = z.reshape(nrP*nPr); settozero = (zre > zmax)
+        radProfile[settozero] = 0.0
     foo =np.diff(z); bar =foo[:,-1];peloton=radProfile.reshape(nPr,nrP)
     diffz = np.insert(foo,-1,bar,axis=1)
     intProfile = 2.0*np.sum(radProfile.reshape(nPr,nrP)*diffz,axis=1)

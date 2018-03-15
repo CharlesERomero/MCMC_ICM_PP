@@ -149,6 +149,7 @@ def plsphere(p,rmin,rmax,radarr):
 def plshell(p,rmin,rmax,radarr):
     c1 = radarr<=rmax              # condition 1
     c2 = radarr[c1]<rmin           # condition 2
+    c3 = radarr<rmin               # c1[c2] as I would expect in IDL
 #    c1 = np.where(radarr<=rmax)     # condition 1
 #    c2 = np.where(radarr[c1]<rmin)  # condition 2
     sir=(radarr[c1]/rmin)           # scaled inner radii
@@ -169,7 +170,10 @@ def plshell(p,rmin,rmax,radarr):
       ibor=ri.myrincbeta(sor**2,p-0.5,0.5)     # Inc. Beta for out. rad.
       plinn=(sir**(1.0-2.0*p))                 # Power law term for inner radii
       myres[c1]=plinn*(1.0-ibor)*cbf           # Define values for the enclosed circle
-      myres[c1[c2]]=plinn[c2]*(ibir-ibor[c2])*cbf # Correct the values for the 
+#      import pdb;pdb.set_trace()
+#      myres[c1[c2]]=plinn[c2]*(ibir-ibor[c2])*cbf # Correct the values for the
+### Changed this March 9, 2018:
+      myres[c3]=plinn[c2]*(ibir-ibor[c2])*cbf # Correct the values for the 
                                                # inner circle
     return myres*rmin                          # The results we want
 

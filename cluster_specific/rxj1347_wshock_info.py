@@ -38,15 +38,18 @@ class files:
             self.name='rxj1347'
 #############################################################
             if map_file == 'noise':
-                self.indir= m2dir+"AGBT17_Products/RXJ1347/"
-                self.fitsfile=self.indir+"pca7_f0.09_noise.fits"
+                self.indir= m2dir+"AGBT17_Products/RXJ1347/post2018/"
+#                self.fitsfile=self.indir+"pca7_f0.09_noise.fits"
+                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__noise.fits"
             if map_file == 'all':
-                self.indir= m2dir+"AGBT17_Products/RXJ1347/"
-                self.fitsfile=self.indir+"pca7_f0.09_map.fits"
+                self.indir= m2dir+"AGBT17_Products/RXJ1347/post2018/"
+#                self.fitsfile=self.indir+"pca7_f0.09_map.fits"
+                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__map.fits"
 #############################################################
             self.wtfile=self.fitsfile # It's in the same file; just a different extension.
             self.wtext=1         # The extension of the weight (or RMS) array
             self.wtisrms=False   # The "weight" file is actual the RMS of pixels
+            self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
         
             ###############################################################################
             ### Here's what I need to know about the transfer function format:
@@ -68,6 +71,7 @@ class files:
             self.fitptsrcs = True
             self.fitmnlvl  = True
             print 'This section not developed yet!'
+            self.units='Jy/beam'
             import pdb; pdb.set_trace()
             
         if instrument == "BOLOCAM":
@@ -76,6 +80,7 @@ class files:
             self.fitptsrcs = False
             self.fitmnlvl  = False
             print 'This section not developed yet!'
+            self.units='Kelvin'
             import pdb; pdb.set_trace()
             
 class priors:
@@ -167,6 +172,9 @@ class ptsrc:
 
     def __init__(self):
 
-        self.locs = [(Angle('13h47m30.6s'),Angle('-11d45m10.24s'))]
+        self.locs  = [(Angle('13h47m30.6s'),Angle('-11d45m10.24s'))]
         ### Enter 0 if a point source is truly point-like.
-        self.fwhm = [9.0]
+        self.fwhm  = [9.0]
+        ### From Kitayama et al. 2016: ~4.00 +/- 0.03 +/- 0.25 mJy at 90 GHz
+        self.prior    = {'MUSTANG2':[0.003*u.K]}
+        self.priorunc = {'MUSTANG2':[0.0002*u.K]}

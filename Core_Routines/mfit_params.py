@@ -9,7 +9,7 @@ myhome = expanduser("~")
 
 class common_fit_params:
 
-    def __init__(self,bins=[6],shbins=[6],path=myhome'/Results_Python/',
+    def __init__(self,bins=[6],shbins=[6],path=myhome+'/Results_Python/',
                  bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
                  shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
                  ptsrcs=[],psfwhm=[],
@@ -124,14 +124,14 @@ class common_fit_params:
             self.burn_in = 100
         ### And here is a test mode which really just verifies that the code will run.
         elif testmode == 'Test':
-            self.nwalkers= self.ndim *2 + 10
-            self.nsteps  = 50
-            self.burn_in = 10
+            self.nwalkers= self.ndim *2 + 10   # Whatever...as it needs to be.
+            self.nsteps  = 25                  # Seriously need to push to small numbers
+            self.burn_in = 5                   # Really small numbers
         ### The following is designed to show the burn-in steps:
         elif testmode == 'Burn':             
             self.nwalkers= self.ndim *2 + 10
-            self.nsteps  = 1000
-            self.burn_in = 200
+            self.nsteps  = 500
+            self.burn_in = 100
         ### This can be the "standard" ("Full") run:
         else:
             self.nwalkers= self.ndim *3
@@ -164,15 +164,16 @@ class common_fit_params:
             
 class inst_fit_params:
 
-    def __init__(self,inputs,maskrad=0):
+    def __init__(self,inputs,ptsrcs,instrument,maskrad=0):
 
         fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = rdi.inst_params(inputs.instrument)
         if maskrad == 0: maskrad = FoV*1.5
-
         self.mn_lvl  = inputs.fitmnlvl     # Do not fit for a mean level
         self.pt_src  = inputs.fitptsrcs
-        
         self.maskrad = maskrad
+        
+        self.prior=[myprior for myprior in ptsrcs.prior[instrument]]
+        self.priorunc=[mypriorunc for mypriorunc in ptsrcs.priorunc[instrument]]
             
         n_add_params=0
         if self.mn_lvl == True : n_add_params+=1

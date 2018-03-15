@@ -34,6 +34,15 @@ def get_cosmology(ref = "Planck2016"):
 
         
     ########################################################
+    
+    if ref == "Concordance":
+        ### Cosmology from Hinshaw+ 2013
+        omega_m, omega_A = 0.3, 0.7 
+        H0 = 70.0 *u.m /(const.kpc *u.s)
+        #cosmo = {"omega_M_0":omega_m,"omega_lambda_0":omega_A, "h":0.697}
+
+        
+    ########################################################
     H100 = 100.0 *u.m /(const.kpc *u.s)
     cosmo = {"omega_M_0":omega_m,"omega_lambda_0":omega_A, "h":(H0/H100).value}
     h_70 = H0/70. /u.m *(const.kpc *u.s)

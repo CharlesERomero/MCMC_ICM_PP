@@ -2,6 +2,11 @@ import numpy as np
 import scipy as sp
 
 def num_los_int(epsnot,sindex,rmin,rmax,radarr,c=1,ff=1e-3,epsatrmin=0):
+    """
+    This looks like I made it to check the analytic integrations of the
+    ellipsoidal power-law shells/spheres.
+    """
+    
 
   rrmm = (radarr==np.amin(radarr))
   if (radarr[rrmm] == 0) and (sindex > 0):

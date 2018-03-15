@@ -28,7 +28,8 @@ def plot_res_no_sampler(hk,dv,efv,overlay=None):
     plot_correlations(pres_samples,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr)
     maxlikesky=mlf.get_best_comp_maps(efv,hk,dv)
     import pdb;pdb.set_trace()
-    plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
+    plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv,
+                  mycomp='data')
 ##########################################################################
 
 def plot_results(hk,dv,efv,sampler,hdu,overlay=None):
@@ -39,7 +40,8 @@ def plot_results(hk,dv,efv,sampler,hdu,overlay=None):
     tstr = hk.cfp.testmode
     tstr = tstr+'_'+efv.tag
 
-    ibulk=0   # I'm not sure what to do here.
+    ibulk=0; ishock=0; iptsrc=0   # I'm not sure what to do here.
+    mydatamaps={}
     for myinst in hk.instruments:
         ### Set up the necessary variables for the model map(s) of each instrument
         #nx,ny = dv[myinst].mapping.radmap.shape
@@ -66,13 +68,26 @@ def plot_results(hk,dv,efv,sampler,hdu,overlay=None):
         ###
         pres_samples = ((efv.samples/(efv.Pdl2y)).to(efv.punits)).value # In keV cm**-3
         plot_correlations(pres_samples,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr)
+        ###############################################################################
+        ### plot_best_sky already loops over instrument keys - so I need to reorganize this.
+        ### (March 7, 2018)
+        ###
+        maxlikesky=mlf.get_best_comp_maps(efv,hk,dv,myinst,"ptsrc"+str(iptsrc+1),hdu)
+        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv,
+                      mycomp="ptsrc"+str(ibulk+1))
         maxlikesky=mlf.get_best_comp_maps(efv,hk,dv,myinst,"bulk"+str(ibulk+1),hdu)
-        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
-        maxlikesky=mlf.get_best_comp_maps(efv,hk,dv,myinst,"shock"+str(ibulk+1),hdu)
-        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv)
+        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv,
+                      mycomp="bulk"+str(ibulk+1))
+        maxlikesky=mlf.get_best_comp_maps(efv,hk,dv,myinst,"shock"+str(ishock+1),hdu)
+        plot_best_sky(maxlikesky,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv,
+                      mycomp="shock"+str(ibulk+1))
+        ### And then plot the actual data:
+        mydatamaps[myinst]=dv[myinst].maps.data
+        plot_best_sky(mydatamaps,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,
+                      dv,mycomp='data')
 
 def plot_steps(sampler,fit_params,newpath,pre_filename):
-    stepmap = plt.figure(1)
+    stepmap = plt.figure(1,figsize=(20,12))
     for i in range(fit_params.ndim):
         ax = stepmap.add_subplot(fit_params.ndim+1,1,i+1)
         ax.plot(np.array([sampler.chain[:,j,i] for j in range(fit_params.nsteps)]),"k")
@@ -110,7 +125,7 @@ def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None
     ### But I don't use this???
     #import pdb;pdb.set_trace()
     binsolns = efv.paramdict[inst][compname+'_bins'] * (u.rad).to("arcsec") # Now correct for plotting.
-
+    
     nbins = fit_params.bulkbins[count-1] # How many bins did I have in this model?
     errstoplot= [psolns[:,1].value,psolns[:,2].value]
     valstoplot= psolns[:,0].value #already just a value (not quantity)
@@ -118,18 +133,24 @@ def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None
     #cents=radarr * (u.rad).to("arcsec") # Now correct for plotting.
     cents = binsolns
     if center == True:
-        lradarr = np.append(0,binsolns[:-1])
-        cents   = (lradarr + binsolns)/2.0
-        offlow  = cents - lradarr
-        offhig  = binsolns - cents
-        xerr    = [offlow,offhig]
+        if hk.cfp.shockfin[count-1] == True and component =='Shock':
+            #print 'hey dude'
+            cents   = (binsolns[:-1] + binsolns[1:])/2.0
+            diffs   = np.diff(binsolns)
+            xerr    = [diffs/2.0,diffs/2.0]
+        else:
+            #print 'normal stuff'
+            lradarr = np.append(0,binsolns[:-1])
+            cents   = (lradarr + binsolns)/2.0
+            offlow  = cents - lradarr
+            offhig  = binsolns - cents
+            xerr    = [offlow,offhig]
         #lradarr = np.append(0,radarr[:-1])
         #cents = (lradarr + radarr)*(u.rad).to("arcsec")/2.0
         #offlow = cents - lradarr*(u.rad).to("arcsec")
         #offhig = radarr*(u.rad).to("arcsec") - cents
         #xerr = [offlow,offhig]
 #################################################################
-    print cents
     #import pdb; pdb.set_trace()
     plt.errorbar(cents,valstoplot,xerr=xerr,yerr=errstoplot,fmt='.',label="Deprojected profile",capsize=5)
 #plt.plot(range_r, clj1226.pprofile(range_r, P0true, rptrue, 
@@ -147,6 +168,7 @@ def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None
     if overlay == 'russell':
         overplot_russell(efv,cluster)
         
+    print cents, rin, rout
     plt.axvline(rin,color=axcol, linestyle ="dashed")
     plt.axvline(rout,color=axcol, linestyle ="dashed")
     plt.yscale("log")
@@ -161,10 +183,11 @@ def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None
     filename = tstr+"pressure.eps"
     fullpath = os.path.join(hk.hk_outs.newpath,hk.hk_outs.prefilename+filename)
     plt.savefig(fullpath,format='eps')
+    import pdb;pdb.set_trace()
 
 def plot_correlations(samples,newpath, pre_filename):
 
-    plt.figure(2)
+    plt.figure(2,figsize=(20,12))
     plt.clf()
     fig = corner.corner(samples, bins = 45,quantiles=[0.16,0.50,0.84],
                         labels=["$P_{1}$","$P_{2}$","$P_{3}$","$P_{4}$","$P_{5}$","$P_{6}$","$P_{7}$","$P_{8}$",
@@ -176,44 +199,61 @@ def plot_correlations(samples,newpath, pre_filename):
 def plot_best_sky(maxlikesky,newpath, pre_filename,dv,mycomp="bulk",count=1):
 
     mapaxisunits="arcsec"   #...Should add as a keyword
-    mapunits="Jy/Beam"
+    mapunits="Jy/Beam"      # A default unit.
     for key in maxlikesky:
         instrument=key
-        plt.figure(2)
-        plt.clf()
-        plt.imshow(maxlikesky[key]) # May want to add "extent"
-#        plt.title("Model Compton y")
-        plt.title("Unfiltered "+mycomp+" model ("+mapunits+")")
-        #plt.xlabel("arcsec")
-        #plt.ylabel("arcsec")
-        plt.xlabel(mapaxisunits)
-        plt.ylabel(mapaxisunits)
-        cbar = plt.colorbar() 
-        cbar.set_label(mapunits)
+        mapunits = dv[key].maps.units   # What the units should actually be.
+        image = maxlikesky[key]
+        if mycomp == 'data':
+            title = "Unsmoothed "+mycomp+" model ("+mapunits+")"
+        else:
+            title = "Unfiltered "+mycomp+" model ("+mapunits+")"
         filename = "flux_density_"+mycomp+"_skymodel.png"
         fullpath = os.path.join(newpath, pre_filename+filename)
-        plt.savefig(fullpath)
+        plot_sky_map(fullpath,image,title,mapaxisunits,mapunits)
+##################################################################################################
 
         beam_conv = ip.conv_inst_beam(maxlikesky[key],dv[instrument].mapping.pixsize,instrument=instrument)
-        gc_model=ip.apply_xfer(beam_conv, dv[instrument].mapping.tab,instrument=instrument)
-    
+        image = beam_conv
+        title = "Smoothed "+mycomp+" model ("+mapunits+")"
+        if mycomp != 'data':
+            gc_model=ip.apply_xfer(beam_conv, dv[instrument].mapping.tab,instrument=instrument)
+            image = gc_model
+            title = "Filtered "+mycomp+" model ("+mapunits+")"
+
         mapaxisunits="arcsec"   #...Should add as a keyword
-        plt.figure(2)
-        plt.clf()
-        plt.imshow(gc_model) # May want to add "extent"
-        plt.title("Filtered "+mycomp+" model ("+mapunits+")")
-        #plt.xlabel("arcsec")
-        #plt.ylabel("arcsec")
-        plt.xlabel(mapaxisunits)
-        plt.ylabel(mapaxisunits)
-        cbar = plt.colorbar() 
-        cbar.set_label(mapunits)
         filename = "flux_density_"+mycomp+"_filtered.png"
+        if mycomp == 'data':
+            filename = "flux_density_"+mycomp+"_smoothed.png"
         fullpath = os.path.join(newpath, pre_filename+filename)
-        plt.savefig(fullpath)
-        
+        plot_sky_map(fullpath,image,title,mapaxisunits,mapunits)
+##################################################################################################
+
+        if mycomp == 'data':
+            weightmap = dv[instrument].maps.wts
+            wt_conv = ip.conv_inst_beam(weightmap,dv[instrument].mapping.pixsize,instrument=instrument)
+            bv = rdi.get_beamvolume(instrument)
+            wt_conv*= bv # Weight has increased with smoothing...
+            nzi = (wt_conv > 0)
+            inv_rms_map = (wt_conv)**(0.5)
+            snr_map = np.zeros(inv_rms_map.shape)
+            snr_map[nzi] = beam_conv[nzi] * inv_rms_map[nzi]
+            title = "Smoothed "+mycomp+" SNR map"
+            filename = "flux_density_"+mycomp+"_smoothed_SNR.png"
+            fullpath = os.path.join(newpath, pre_filename+filename)
+            plot_sky_map(fullpath,snr_map,title,mapaxisunits,'SNR')
+
     #### End of loop.
 
+def plot_sky_map(fullpath,image,title,mapaxisunits,mapunits,format=format):
+
+    plt.figure(2,figsize=(20,12));        plt.clf()
+    plt.imshow(image) # May want to add "extent"
+    plt.title(title)
+    plt.xlabel(mapaxisunits); plt.ylabel(mapaxisunits)
+    cbar = plt.colorbar();    cbar.set_label(mapunits)
+    plt.savefig(fullpath,format=format)
+    
 def overplot_input(hk,efv,cluster):
 
     nw = True

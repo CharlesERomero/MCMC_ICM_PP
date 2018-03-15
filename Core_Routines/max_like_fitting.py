@@ -48,6 +48,8 @@ class emcee_fitting_vars:
         myval=[]
         myalp=[]
         sbepos=[]  # Boolean array indicating whether myval should be positive or not.
+        priors=[]  # An array of priors.
+        priunc=[]  # If prior unc < 0, then there is no actual prior.
         ### Integral(P*dl) to Compton y (for dl given in radians):
         Pdl2y = (hk.av.szcu['thom_cross']*hk.cluster.d_a/hk.av.szcu['m_e_c2']).to("cm**3 keV**-1")
         R500 = (hk.cluster.R_500/hk.cluster.d_a).decompose()
@@ -68,6 +70,8 @@ class emcee_fitting_vars:
                 #import pdb;pdb.set_trace()
                 myval.append(mnlvlguess) # Append better for scalars
                 sbepos.extend([False])
+                priors.extend([mnlvlguess])
+                priunc.extend([-1.0])
         
         for bulkbins,fit_cen in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid):
             a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,bulkbins)
@@ -76,30 +80,52 @@ class emcee_fitting_vars:
             myalp.extend(uless_p*0.0) # What if I want to use strict alphas??
             ### I need to play with centroids (updated how I do the following):
             sbepos.extend(np.ones((len(uless_p)),dtype=bool))
+            priors.extend(uless_p)
+            priunc.extend(uless_p*0.0 -1.0)
             if fit_cen == True:
                 myval.extend([1.0,1.0]) # In particular, how much should I allow this to vary?
-                myalp.extend([0.0,0.0]) # In particular, how much should I allow this to vary?
+                #myalp.extend([0.0,0.0]) # In particular, how much should I allow this to vary?
                 # What units am I using for this?? (arcseconds? Pixel size? radians?)
                 sbepos.extend([False,False])
+                priors.extend([0.0,0.0])
+                priunc.extend([-1.0,-1.0])
 
         for shockbins in hk.cfp.shockbin:
-            a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,shockbins)
+            myshockbins = shockbins
+            if hk.cfp.shockfin == True:
+                myshockbins = shockbins[:-1]
+            a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,myshockbins)
             uless_p = (a10pres*Pdl2y).decompose().value
             myval.extend(uless_p)
             myalp.extend(uless_p*0.0) # What if I want to use strict alphas??
             sbepos.extend(np.ones((len(uless_p)),dtype=bool))
- 
+            priors.extend(uless_p)
+            priunc.extend(uless_p*0.0 -1.0)
+
         ### I need to think a bit more about whether this is best or not.
-        for myptsrc in hk.cfp.ptsrc:
+        for iptsrc, myptsrc in enumerate(hk.cfp.ptsrc):
             for myinst in hk.instruments:
                 if ifp[myinst].pt_src == True:
-                    myval.extend([0.002]) # Estimate ~2 mJy?? for most point sources...to start.
+                    try:
+                        if u.Unit(dv[myinst].maps.units) == ifp[myinst].prior[iptsrc].unit:
+                            myval.extend([ifp[myinst].prior[iptsrc].value])
+                            priors.extend([ifp[myinst].prior[iptsrc].value])
+                            priunc.extend([ifp[myinst].prior[iptsrc].value])
+                        else:
+                            print 'You need to convert the prior to the proper units.'
+                            print 'I will just let the errors occur. You have been warned.'
+                    except:
+                        myval.extend([0.003]) # Estimate ~3 mK?? for most point sources...to start.
+                        priors.extend([0.003])
+                        priunc.extend([-1.0])
                     sbepos.extend([True]) # But really we found ~5 mJy for RXJ1347. WTF?
 
         for myblob in hk.cfp.blob:
             for myinst in hk.instruments:
                 if ifp[myinst].fitblob == True:
                     myval.extend([1.0,1.0,1.0]) 
+                    priors.extend([1.0,1.0,1.0])
+                    priunc.extend([-1.0,-1.0,-1.0])
                     sbepos.extend([True,True,True])
 
         ### Some attributes for starting conditions / model creation.
@@ -110,6 +136,8 @@ class emcee_fitting_vars:
         self.thetamin= tnx[0]
         self.Pdl2y   = Pdl2y
         self.sbepos  = sbepos
+        self.priors  = priors
+        self.priunc  = priunc
         ### Some attributes for the results:
         self.t_mcmc  = 0.0       # Time that MCMC took.
         self.samples = None
@@ -131,7 +159,9 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,map
                             fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
                             finite=False):
 
-    nbins = len(bins)        
+    nbins = len(bins)
+    if finite == True:
+        nbins-=1     # Important correction!!!
     ulesspres = pos[posind:posind+nbins]
     #myalphas  = alphas[posind:posind+nbins]
     myalphas = alphas   # I've updated how I pass alphas; indexing no longer necessary! (16 Nov 2017)
@@ -167,6 +197,7 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,map
             yint=0 # A sure way to give something clearly wrong -> bring myself back here.
             import pdb;pdb.set_trace() # A better way...
         else:
+            ### Convert to Column Density (for kSZ)....?
             ConvtoCD= hk.av.szcv["m_e_c2"]/(hk.av.szcv["boltzmann"]*hk.hk_ins.Tx)
             IntProf = Int_Pres * (dv[myinst].tSZ + dv[myinst].kSZ*ConvtoCD)
 
@@ -201,12 +232,14 @@ def mk_ptsrc_v2(pos,posind,hk,dv,ifp,maps={}):
                 if hk.cfp.psfwhm[index] > fwhm:
                     #print "Adjusted FWHM"
                     fwhm = hk.cfp.psfwhm[index]
-                sigma   = fwhm/(2.0 * np.sqrt((2.0 * np.log(2.0))))
+                sigma    = fwhm/(2.0 * np.sqrt((2.0 * np.log(2.0))))
                 #import pdb; pdb.set_trace()
-                centroid= dv[myinst].mapping.ptsrclocs[index]
-                xcoord  = x - centroid[0];  ycoord=y - centroid[1]
-                mygauss = np.exp(((-(xcoord)**2 - (ycoord)**2) )/( 2.0 * sigma**2))
-                maps[myinst] += mygauss
+                centroid = dv[myinst].mapping.ptsrclocs[index]
+                xcoord   = x - centroid[0];  ycoord=y - centroid[1]
+#                xcoord   = x - np.asscalar(centroid[0])
+#                ycoord   = y - np.asscalar(centroid[1])
+                mygauss  = np.exp(((-(xcoord)**2 - (ycoord)**2) )/( 2.0 * sigma**2))
+                maps[myinst] += mygauss*myflux
                 posind += 1   # posind must be incremented for *each* instrument!
         
     return maps,posind
@@ -223,7 +256,7 @@ def mk_ptsrc(pos,posind,centroid,hk,dv,ifp,maps={}):
             sigma   = fwhm/(2.0 * np.sqrt((2.0 * np.log(2.0))))
             xcoord  = x - centroid[0];  ycoord=y - centroid[1]
             mygauss = np.exp(((-(xcoord)**2 - (ycoord)**2) )/( 2.0 * sigma**2))
-            maps[myinst] += mygauss
+            maps[myinst] += mygauss*myflux
             posind += 1   # posind must be incremented for *each* instrument!
         
     return maps
@@ -262,6 +295,14 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
         if hk.cfp.pprior == True:
             plike = -0.5* (np.sum(((ycyl - yplanck)**2) * ywait)) #ywait = ycyl_weight(s)
 
+        mypriind = (np.array(efv.priunc) > 0)
+        pwithpri = np.array(pos)[mypriind]
+        priorunc = np.array(efv.priunc)[mypriind]
+        mypriors = np.array(efv.priors)[mypriind]
+        addlike=0.0 
+        if len(priorunc) > 0:
+            addlike =  -0.5* (np.sum(((pwithpri - mypriors)**2) / priorunc**2))
+        
         ### Pt src priors??
         #mnlvl_amp,ptsrc_amp,blob_amp = unpack_fit_params(pos,hk)
         #ulesspres = pos[0:hk.cfp.bins]
@@ -271,12 +312,11 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
         #        pspr = hk.hk_ins.psfd[0]; psprunc = hk.hk_ins.psunc[0]
         #        plike += -0.5* (np.sum(((ptsrc_amp - pspr)**2)/(psprunc**2) ))
 
-        addlike=0.0; #prespos = pos[1:]
         prespos = pos[efv.sbepos]
         if all([param > 0.0 for param in prespos]) and (outalphas[-1] > 1.0):
             #print 'Everything OK'
             return plike+addlike
-        print 'In LnPrior, LogLike set to infinity'
+        print 'In LnPrior, LogLike set to infinity ', outalphas[-1]
         #import pdb;pdb.set_trace()
         return -np.inf
 
@@ -309,7 +349,7 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
     for i, result in enumerate(sampler.sample(pos, iterations=hk.cfp.nsteps)):
     #    print i
         if (i+1) % 10 == 0:
-            print "{0:5.1%}".format(float(i) / hk.cfp.nsteps)
+            print "{0:5.1%}".format(float(i+1) / hk.cfp.nsteps)
             
     #import pdb;pdb.set_trace()
     #sampler.run_mcmc(pos,hk.cfp.nsteps)
@@ -443,6 +483,8 @@ def post_mcmc(sampler,t_mcmc,efv,hk,dv):
 
 def unpickle(file=None):
 
+    print 'THIS SECTION IS OLD! DO NOT USE!'
+    import pdb;pdb.set_trace()
     sdir =myhome+'/Results_Python/MUSTANG2/a2146/'
     file=sdir+'2707_MUSTANG2_6_B_Real_2500S_500B_ML-NO_PP-NO_POWER_30W_pickle.sav'
     rdfl = open(file,'r')
