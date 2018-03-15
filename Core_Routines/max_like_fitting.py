@@ -9,6 +9,7 @@ import rw_resultant_fits as rwrf        # Read/Wrte Resultant Fits
 from scipy.interpolate import interp1d  # 1-dimensional interpolation (for the integrated profiles)
 from os.path import expanduser          # A way to determine what the home directory is
 import multiprocessing                  # A way to determine how many cores the computer has
+import datetime                         # A more thorough module than time.
 rwrf=reload(rwrf)                       # Reload - primarily of use during development of code.
 myhome = expanduser("~")                # What is the user's home directory?
 ncpus  = multiprocessing.cpu_count()    # One can decide how aggressively to parallel process.
@@ -333,7 +334,7 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
         return lp + likel
 
 ##################################################################################    
-    t0 = time.time();    myargs = efv.pinit
+    t0 = time.time();    myargs = efv.pinit; dt0 = datetime.datetime.now()
     ndim = len(myargs)
     maps,yint,outalphas = make_skymodel_maps(myargs,hk,dv,ifp,efv)
     print myargs
@@ -349,13 +350,22 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
     for i, result in enumerate(sampler.sample(pos, iterations=hk.cfp.nsteps)):
     #    print i
         if (i+1) % 10 == 0:
-            print "{0:5.1%}".format(float(i+1) / hk.cfp.nsteps)
+            t_so_far = time.time() - t_premcmc
+            perdone  = float(i+1) / hk.cfp.nsteps
+            t_total  = t_so_far / perdone
+            t_finsih = dt0 + datetime.timedelta(second=t_total)
+            print "{0:5.1%}".format(perdone)+' done; >>> EXPECTED FINISH TIME: ',\
+                t_finish.strftime("%Y-%m-%d %H:%M%S")
             
     #import pdb;pdb.set_trace()
     #sampler.run_mcmc(pos,hk.cfp.nsteps)
     
     t_mcmc = time.time() - t_premcmc
-    print "MCMC time: ",t_mcmc
+    dt_end = datetime.datetime.now()
+    
+    print "MCMC time: ",t_mcmc/3600.0,' hours'
+    print "Finishing time: ". dt_end.strftime("%Y-%m-%d %H:%M%S")
+    print "This is equivalent to ",t_mcmc/hk.cfp.nsteps," seconds per step."
     print "Initial Guesses: ", efv.pinit
     
     return sampler, t_mcmc
