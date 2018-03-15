@@ -6,9 +6,9 @@ import instrument_processing as ip
 import numpy as np
 import os
 
-def savemap(map,filename,wtmap=None,header=None):
+def savemap(mymap,filename,wtmap=None,header=None):
 
-    hdu1 = fits.PrimaryHDU(map,header=header)
+    hdu1 = fits.PrimaryHDU(mymap,header=header)
     hdulist = fits.HDUList([hdu1])
     hdulist.info()
     hdulist.writeto(filename,overwrite=True,output_verify="exception")
@@ -82,6 +82,7 @@ def make_and_save_model_maps(hk,dv,efv):
         yint.append(ynt); outalphas.extend(myalphas)
         conc_hdu(dv,hk,maps[mapind],title='Bulk',hdu=hdu,count=count); mapind+=1
         clear_maps(zeromaps,hk,dv)
+        print 'Testing count ', count
         
     ### Model any shocks:
     count=1
@@ -89,14 +90,17 @@ def make_and_save_model_maps(hk,dv,efv):
                                          hk.cfp.shockalp,hk.cfp.shocknarm):
         compname = 'Shock'+str(count)
         nbins = len(bins)
+        if hk.cfp.shockfin[count-1] == True:
+            nbins-=1
         parbycomp[myinst][compname]=pos[posind:posind+nbins]
         parbycomp[myinst][compname+'_bins']=bins
         parbycomp[myinst][compname+'_ind']=np.arange(posind,posind+nbins)
         outmaps,posind,shint,shout = mlf.bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,zeromaps,posind,
                                                                  fixalpha=hk.cfp.shockfix,finite=hk.cfp.shockfin)
         maps.append(outmaps)
-        conc_hdu(dv,hk,maps[mapind],title='Shock',hdu=hdu,count=count)
+        conc_hdu(dv,hk,maps[mapind],title='Shock',hdu=hdu,count=count); mapind+=1
         clear_maps(zeromaps,hk,dv)
+        print 'Testing count ', count
 
     ### Model any point sources (hk.cfp.ptsrc is a 2-tuple, the pt src. centroid):
     count=1
@@ -106,9 +110,11 @@ def make_and_save_model_maps(hk,dv,efv):
         parbycomp[myinst][compname+'_ind']=np.array([posind])
         #outmaps,posind = mlf.mk_ptsrc(pos,posind,myptsrc,hk,dv,zeromaps)
         outmaps,posind = mlf.mk_ptsrc_v2(pos,posind,hk,dv,efv.ifp,zeromaps)
+        #import pdb;pdb.set_trace()
         maps.append(outmaps)
         conc_hdu(dv,hk,maps[mapind],title='PtSrc',hdu=hdu,count=count); mapind+=1
         clear_maps(zeromaps,hk,dv)
+        print 'Testing count ', count
 
     ### Model any "blobs" (2D Gaussians):
     ### This is currently not functional because I'm not sure exactly how I want to implement

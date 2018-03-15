@@ -449,7 +449,8 @@ def analytic_shells(r_bins,vals,theta,correl=False,alphas=[],shockxi=0.0,fixalph
     [finite] : Set this keyword if you do NOT want to integrate to infinity.
     [narm]   :  Normalize at R_min (within a bin)
     [strad]  : STrict RADii. When using a shock model (e.g. Abell 2146), where specific radii,
-               ESPECIALLY inner radii are defined, this keyword MUST be set!
+               ESPECIALLY inner radii are defined, this keyword SHOULD be set! Note that if
+               the finite keyword is set, then this does not need to be set. 
 
     Returns
     -------
@@ -513,7 +514,7 @@ def analytic_shells(r_bins,vals,theta,correl=False,alphas=[],shockxi=0.0,fixalph
                 alphas[idx]=-lp/lr
  
 #        print '#-#--#---#----#-----#------#-------#------#-----#----#---#--#-#'
-#        print alphas[idx], idx, rin, rout, shockxi,aset
+#        print alphas[idx], idx, rin, rout, shockxi
 ### Beware of 2.0*shockxi!!! (26 July 2017)
         #import pdb;pdb.set_trace()
         integrals[idx] = shell_pl(mypressure,alphas[idx]+2.0*shockxi,rin,rout,theta,narm=narm) #R had been in here.

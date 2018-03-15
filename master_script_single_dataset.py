@@ -34,7 +34,7 @@ myhome = expanduser("~")
 
 ########## Allow a few defaults / parameters to be set here: ##############
 instrument='MUSTANG2'; name='rxj1347_wshock'; savedir=myhome+'/Results_Python'
-tag='Re_9FWHM_v0_'; testmode='Test'; nthreads=1
+tag='Re_9FWHM_v2_'; testmode='Burn'; nthreads=1
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
 ################ Get parameters for fitting procedure: ####################

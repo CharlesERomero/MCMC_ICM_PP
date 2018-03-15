@@ -25,10 +25,10 @@ def inst_params(instrument):
         FoV   = 42.0*u.arcsec #
         
     if instrument == "MUSTANG2":
-        fwhm1 = 8.7*u.arcsec  # arcseconds
-        norm1 = 0.94          # normalization
-        fwhm2 = 28.4*u.arcsec # arcseconds
-        norm2 = 0.06          # normalization
+        fwhm1 = 8.9*u.arcsec  # arcseconds
+        norm1 = 0.97          # normalization
+        fwhm2 = 25.0*u.arcsec # arcseconds
+        norm2 = 0.03          # normalization
         fwhm  = 9.0*u.arcsec
         smfw  = 10.0*u.arcsec
         freq  = 90.0*u.gigahertz # GHz
@@ -168,7 +168,8 @@ def inst_bp(instrument,array="2"):
 class maps:
 
     def __init__(self,inputs):
-     
+
+        print 'Reading in data from: ',inputs.fitsfile
         data_map, header = fits.getdata(inputs.fitsfile, header=True)
         wt_map = fits.getdata(inputs.wtfile,inputs.wtext)
         if inputs.wtisrms == True: 
@@ -177,11 +178,17 @@ class maps:
         self.header = header
         self.wts    = wt_map
         self.masked_wts = wt_map
+        self.units  = inputs.units
 
         if inputs.instrument == "MUSTANG" or inputs.instrument == "MUSTANG2":
-            keep=np.where(wt_map > np.max(wt_map)/2.0)
-            mask=np.where(wt_map < np.max(wt_map)/2.0)
+            keep=np.where(wt_map > np.median(wt_map))
+            mask=np.where(wt_map < np.median(wt_map))
             gwts = wt_map[keep]
+            npix = len(gwts)
+            print 'FYI: with a mask threshold of median(wt_map), we use ',npix,\
+                'pixels, which is roughly equivalent to a circle of radius ',\
+                "{:7.1f}".format(np.sqrt(npix)/np.pi),' pixels.'
+            
             self.masked_wts[mask] = 0.0
         
 #        if not(inputs.psfile == None):
@@ -210,8 +217,8 @@ class maps:
 #            self.misc3,self.mis3hdr = None,None
 
 
-def get_sz_bp_conversions(temp,instrument,array="2",inter=False,beta=1.0/300.0,
-                          betaz=1.0/300.0,rel=True):
+def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,beta=1.0/300.0,
+                          betaz=1.0/300.0,rel=True,quiet=False):
 
     szcv,szcu=mad.get_sz_values()
     freq_conv = (szcv['planck'] *1.0e9)/(szcv['boltzmann']*szcv['tcmb'])
@@ -260,17 +267,28 @@ def get_sz_bp_conversions(temp,instrument,array="2",inter=False,beta=1.0/300.0,
     bT = np.sum(TY*band)/np.sum(band)  # Average over the bandpass
     bK = np.sum(KY*band)/np.sum(band)  # Average over the bandpass
 
-    JypB = tsz.Jyperbeam_factors(bv)
+    JypB = tsz.Jyperbeam_factors(bv)        # Jy per beam conversion factor, from y (bT)
+    xavg = np.sum(xarr*band)/np.sum(band)   # Bandpass averaged frequency; should be a reasonable approximation.
+    Kepy = tsz.TBright_factors(xavg)        # Kelvin conversion factor, from y (bT)
+    
     tSZ_JyBeam_per_y = JypB * bT  # Just multiply by Compton y to get Delta I (tSZ)
     kSZ_JyBeam_per_t = JypB * bK  # Just multiply by tau (of electrons) to get Delta I (kSZ)
+    tSZ_Kelvin_per_y = Kepy * bT  # Just multiply by Compton y to get Delta T (tSZ)
+    kSZ_Kelvin_per_t = Kepy * bK  # Just multiply by tau (of electrons) to get Delta T (kSZ)
 
-    print 'Assuming a temperature of ',temp,' keV, we find the following.'
-    print 'To go from Compton y to Jy/Beam, multiply by: ', tSZ_JyBeam_per_y
-    print 'To go from tau to Jy/Beam (kSZ), multiply by: ', kSZ_JyBeam_per_t
+    if quiet == False:
+        print 'Assuming a temperature of ',temp,' keV, we find the following.'
+        print 'To go from Compton y to Jy/Beam, multiply by: ', tSZ_JyBeam_per_y
+        print 'To go from tau to Jy/Beam (kSZ), multiply by: ', kSZ_JyBeam_per_t
+        print 'To go from Compton y to Kelvin, multiply by: ', tSZ_Kelvin_per_y
+        print 'To go from tau to Kelvin (kSZ), multiply by: ', kSZ_Kelvin_per_t
     
-#    import pdb; pdb.set_trace()
+    if units == 'Kelvin':
+        tSZ_return = tSZ_Kelvin_per_y; kSZ_return = kSZ_Kelvin_per_t
+    else:
+        tSZ_return = tSZ_JyBeam_per_y.value; kSZ_return = kSZ_JyBeam_per_t.value        
         
-    return tSZ_JyBeam_per_y.value, kSZ_JyBeam_per_t.value
+    return tSZ_return, kSZ_return
 
 def get_maps_and_info(instrument,target,real=True):
     """
@@ -294,15 +312,22 @@ def get_maps_and_info(instrument,target,real=True):
 
 def get_beamvolume(instrument):
 
+    ### The default is to assume a double Gaussian
     fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
 
-    sc = 2.0 * np.sqrt(2.0*np.log(2))
-    sig1 = fwhm1/sc
-    sig2 = fwhm2/sc
-    bv1 = 2.0*np.pi * norm1*sig1**2
-    bv2 = 2.0*np.pi * norm2*sig2**2
+    sc = 2.0 * np.sqrt(2.0*np.log(2)) # Sigma conversion (from FWHM)
+    sig1 = fwhm1/sc                   # Apply the conversion
+    sig2 = fwhm2/sc                   # Apply the conversion
+    bv1 = 2.0*np.pi * norm1*sig1**2   # Calculate the integral
+    bv2 = 2.0*np.pi * norm2*sig2**2   # Calculate the integral
     beamvolume = bv1 + bv2  # In units of FWHM**2 (should be arcsec squared) 
 
+    print 'Using ',beamvolume,' for MUSTANG2.'
+#    if instrument == 'MUSTANG2':
+#        beamvolume = beamvolume*0.0 + 110.0 # Hopefully this keeps the units...
+#print 'Using ',beamvolume,' for MUSTANG2.'
+#        import pdb;pdb.set_trace()
+    
     return beamvolume
 
 def get_sz_conversion(temp,instrument,beta=0.0,betaz=0.0):

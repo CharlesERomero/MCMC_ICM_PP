@@ -71,7 +71,7 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
         inputs = input_struct.files(instrument=instrument,map_file='all')
         ### Now, we can get the input data variables
         dv[instrument]  = data_vars(inputs,priors,mycluster,ptsrcs)
-        ifp[instrument] = mfp.inst_fit_params(inputs)
+        ifp[instrument] = mfp.inst_fit_params(inputs,ptsrcs,instrument)
         minmax = angular_range(minmax,dv[instrument].fwhm,dv[instrument].FoV)
         ### Mean levels figure into instrument-specific parameters.
         nifp += ifp[instrument].n_add_params # Number of instrument-specific parameters 
@@ -123,8 +123,8 @@ class data_vars:
         self.astro = rdi.astrometry(self.maps.header)
         self.xfer  = rdi.get_xfer(inputs)
         self.xferdims = inputs.tabdims
-        tSZ,kSZ = rdi.get_sz_bp_conversions(priors.Tx,inputs.instrument,array="2",inter=False,
-                                        beta=beta,betaz=betaz,rel=True)
+        tSZ,kSZ = rdi.get_sz_bp_conversions(priors.Tx,inputs.instrument,inputs.units,array="2",
+                                            inter=False,beta=beta,betaz=betaz,rel=True)
         av = mad.all_astro()     # av = astro vars
         self.mapping = mapping_info(mycluster,inputs,priors,av,tSZ,kSZ,ptsrcs)
         
@@ -292,12 +292,13 @@ class mapping_info:
         w = WCS(inputs.fitsfile)
         x0,y0=w.wcs_world2pix(cluster.ra_deg,cluster.dec_deg,0)
         image_data, ras, decs, hdr, pixs = rdi.get_astro(inputs.fitsfile)
+        print 'Pixel Size is: ',pixs
         theta_min=(pixs/2.0).to("radian").value
         #import pdb; pdb.set_trace()
         xymap = mm.get_xymap(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))        # In arcseconds
         arcmap = mm.get_radial_map(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))  # In arcseconds
         x,y = xymap
-        angmap = np.arctan2(y,x)
+        angmap = np.arctan2(y,x)                              # goes from -pi to +pi
 #        import pdb; pdb.set_trace()
         radmap = (arcmap*u.arcsec).to("rad").value            # In radians
         rmval = radmap; bi=np.where(rmval < theta_min); rmval[bi]=theta_min
@@ -306,7 +307,8 @@ class mapping_info:
         ptxys=[]
         for myptsrc in ptsrcs.locs:
             x1,y1=w.wcs_world2pix(myptsrc[0].to('deg'),myptsrc[1],0)
-            ptxys.append((x1,y1))
+            xpt,ypt = x1-x0, y1-y0          # Must calculate them relative defined coordinate system!
+            ptxys.append((xpt,ypt))
             #import pdb;pdb.set_trace()
 
         ############################################################################################
