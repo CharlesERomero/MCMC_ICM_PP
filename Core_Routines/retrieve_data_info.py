@@ -433,7 +433,8 @@ def get_xfer(inputs):
             pfit = np.polyfit(tab[0,tdim[1]/2:],tab[1,tdim[1]/2:],1)
             addt = np.max(tab[0,:]) * np.array([2.0,4.0,8.0,16.0,32.0])
             extt = np.polyval(pfit,addt)
-            foo = np.stack((addt,extt))
+            ### For better backwards compatability I've editted to np.vstack instead of np.stack
+            foo = np.vstack((addt,extt)) # Mar 5, 2018
             tab = np.concatenate((tab,foo),axis=1)
 #            newt = [np.append(tab[0,:],addt),np.append(tab[1,:],extt)]
             
