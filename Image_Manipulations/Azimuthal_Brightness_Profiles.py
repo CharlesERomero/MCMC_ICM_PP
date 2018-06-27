@@ -70,8 +70,9 @@ def get_az_profile(mymap, xymap, minangle, maxangle, geoparams=[0,0,0,1,1,1,0,0]
     xcoord = xx[trad]
     ycoord = yy[trad]
 
-    foo = mymap > 0.00111263; foo1 = mymap[foo]; foo2 = xx[foo]; foo3 = yy[foo]
-    bar = foo1 < 0.00111265;  bar1 = foo1[bar]; bar2 = foo2[bar]; bar3 = foo3[bar]
+    #mymap > 0.00111263; foo1 < 0.00111265;
+    foo = mymap > 0.0013841; foo1 = mymap[foo]; foo2 = xx[foo]; foo3 = yy[foo]
+    bar = foo1 < 0.0013842;  bar1 = foo1[bar]; bar2 = foo2[bar]; bar3 = foo3[bar]
 
     #print 'found a pixel of value ',bar1,' located at x = ',bar2,' and y = ',bar3
     #print tval, xcoord, ycoord
@@ -168,6 +169,7 @@ def get_two_slices(dv,hk,angmin,angmax):
         
         rads, prof, mythetamask = get_az_profile(data, xymap, angmin, angmax,
                                                  thetamask=mythetamask)
+        #print rads[0:9],prof[0:9]
         mybins=np.arange(0.0,60.0,4.0)
         binres = radial_bin(rads, prof,10,rmax=60.0,bins=mybins,minangle=angmin,maxangle=angmax)
         slices.append(binres)
@@ -177,6 +179,7 @@ def get_two_slices(dv,hk,angmin,angmax):
         
         rads, prof, mythetamask = get_az_profile(data, xymap, angmax, angmin,
                                                  thetamask=mythetamask)
+        #print rads[0:9],prof[0:9]
         mybins=np.arange(0.0,60.0,4.0)
         binres = radial_bin(rads, prof,10,rmax=60.0,bins=mybins,minangle=angmax,maxangle=angmin)
         slices.append(binres)
@@ -195,7 +198,79 @@ def get_two_slices(dv,hk,angmin,angmax):
 
     return profsl
 
-def iter_two_slices(dv,hk,myformat='png'):
+def get_bin_diffs(profsl,radrange):
+
+    thisdiff=0
+    for key in profsl:
+        myslices = profsl[key]
+        rads = myslices[0].rads
+        goodrads = np.logical_and((rads > radrange[0]),(rads < radrange[1]))
+        thisdiff += (myslices[0].profavg[goodrads] - myslices[1].profavg[goodrads])
+
+    return thisdiff
+
+def iter_two_slices(dv,hk,myformat='png',radrange=[10.0,20.0]):
+
+    angmin = np.arange(14.0*np.pi/18.0, 20.0*np.pi/18.0, np.pi/36.0)  # steps of 22.5 degrees
+    angmax = np.arange(24.0*np.pi/18.0, 32.0*np.pi/18.0, np.pi/36.0)  # steps of 22.5 degrees
+    mylist=[]; aminarr = []; amaxarr=[]
+    radunits = 'arcseconds' # This is in fact, hard-coded into my xymaps
+    myinst='MUSTANG2'
+    profunits= dv[myinst].maps.units
+    
+    fig, ax, fullpath = myplotsetup(radunits=radunits,profunits=profunits,format=myformat)
+    linestyles = ['-','--','-.',':']
+    dashlist   = [(100,1),(3,3),(5,2,20,2),(5,2),(4,10),(1,10)]
+    markers    = ['o','*','+','D','s','v']
+    #import pdb;pdb.set_trace()
+    mydiff     = []
+    print len(angmin),len(angmax)
+    
+    for i,thisamin in enumerate(angmin):
+        for j,thisamax in enumerate(angmax):
+            #marker = markers[j]
+            profsl = get_two_slices(dv,hk,thisamin,thisamax)
+            mylist.append(profsl)
+            aminarr.append(thisamin)
+            amaxarr.append(thisamax)
+            #kwargs=[linestyle,marker]
+            #kwargs={'linestyle':dashtup,'marker':marker,'offset':0}
+            #quick_plot_two_slices(fig,ax,profsl,**kwargs)
+            mydiff.append(get_bin_diffs(profsl,radrange))
+
+    diff10=[]; diff14=[]; diff18=[]
+    for myq in mydiff:
+        diff10.append(myq[0])
+        diff14.append(myq[1])
+        diff18.append(myq[2])
+
+    sd10 = np.argsort(diff10); sd14 = np.argsort(diff14); sd18 = np.argsort(diff18)
+    nbest = 20
+    #mybestind = set(sd14[0:nbest-1]).intersection(set(sd18[0:nbest-1])) # Pick indices which appear in both
+    mybestind  = np.intersect1d(sd14[0:nbest-1],sd18[0:nbest-1])
+    indtally   = [np.sum(np.where(sd14[0:nbest-1] == x) + np.where(sd18[0:nbest-1] == x)) for x in mybestind]
+    thebestiii = np.argsort(indtally)
+    thebest    = mybestind[thebestiii[0]]
+
+    bestamin   = aminarr[thebest]
+    bestamax   = amaxarr[thebest]
+    print 'The best min and max angles were found to be: ',bestamin, bestamax
+
+    for k,tint in enumerate(mybestind):
+        lmod = k % len(linestyles); ls   = linestyles[lmod]
+        mind = k/len(linestyles); marker = markers[mind]
+        kwargs={'linestyle':ls,'marker':marker,'offset':0}        
+        quick_plot_two_slices(fig,ax,mylist[tint],**kwargs)
+    
+    #bd10 = [diff10[x] for x in sd10[0:10]]
+    #bd14 = [diff14[x] for x in sd14[0:10]]
+    #bd18 = [diff18[x] for x in sd18[0:10]]
+        
+    plt.legend()
+    plt.savefig(fullpath,format=myformat)
+    return mylist, aminarr, amaxarr
+
+def iter_two_slices_old(dv,hk,myformat='png'):
 
     angmin = np.arange(15.0*np.pi/18.0, 19.0*np.pi/18.0, np.pi/18.0)  # steps of 22.5 degrees
     angmax = np.arange(24.0*np.pi/18.0, 30.0*np.pi/18.0, np.pi/18.0)  # steps of 22.5 degrees
@@ -220,7 +295,7 @@ def iter_two_slices(dv,hk,myformat='png'):
             aminarr.append(thisamin)
             amaxarr.append(thisamax)
             #kwargs=[linestyle,marker]
-            kwargs={'linestyle':dashtup,'marker':marker,'offset':j}
+            kwargs={'linestyle':dashtup,'marker':marker,'offset':0}
             quick_plot_two_slices(fig,ax,profsl,**kwargs)
 
     plt.legend()
@@ -237,14 +312,14 @@ def quick_plot_two_slices(fig,ax,profsl,**kwargs):
         name1    = "{:5.2f}".format(myslices[0].maxangle)
         mylabel  = name0+'_to_'+name1
         ax.plot(myslices[0].rads+offset,myslices[0].profavg,label=mylabel,color='g',
-                 dashes=myls,marker=myma,markersize=10.0)
+                 linestyle=myls,marker=myma,markersize=10.0)
         #name0    = "{:5.2f}".format(myslices[1].minangle)
         #name1    = "{:5.2f}".format(myslices[1].maxangle)
         #mylabel  = name0+'_to_'+name1
         #print myslices[1].npix[10]
-        ############### ,label=mylabel,linestyle=myls
+        ############### ,label=mylabel,linestyle=myls, dashes=myls
         ax.plot(myslices[1].rads+offset,myslices[1].profavg,color='r',
-                 dashes=myls,marker=myma,markersize=10.0)
+                 linestyle=myls,marker=myma,markersize=10.0)
 
 
 def myplotsetup(thispath=newpath,prefilename='Testing_2slice_profiles_',filename='v0.',
@@ -310,24 +385,30 @@ class radial_bin:
 
 
         
-def plot_one_slice(myslice,myformat='png'):
+def plot_one_slice(myslice,myformat='png',fig = None,target='RXJ1347',savedir=newpath,
+                   prefilename='Testing_slice_profiles_',
+                   mylabel="Radial profile, azimuthal slice"):
 
-    plt.figure(2,figsize=(20,12));    plt.clf()
+    if type(fig) == type(None):
+        fig = plt.figure(2,figsize=(20,12));    plt.clf()
+        doleg = False
+        plt.xlabel("Radius ("+myslice.radunits+")")
+        plt.ylabel("Map Intensity ("+myslice.profunits+")")
+        plt.title(target)
+        plt.grid()
+    else:
+        doleg = True
+        
     xerr = [myslice.rads - myslice.radmin, myslice.radmax-myslice.rads]
     yerr = [myslice.profrms/np.sqrt(myslice.npix),myslice.profrms/np.sqrt(myslice.npix)]
     plt.errorbar(myslice.rads,myslice.profavg,xerr=xerr,yerr=yerr,fmt='.',
-                 label="Radial profile, azimuthal slice",capsize=5)
-#    plt.yscale("log")
-#    plt.xscale("log")
-    plt.xlabel("Radius ("+myslice.radunits+")")
-    plt.ylabel("Map Intensity ("+myslice.profunits+")")
-    plt.title('RXJ1347')
-    plt.grid()
-    #newpath='/home/romero/Results_Python/MUSTANG2/rxj1347_wshock'
-    prefilename='Testing_slice_profiles_'
+                 label=mylabel,capsize=5)
     filename='v0.'
-    fullpath = os.path.join(newpath,prefilename+filename+myformat)
+    fullpath = os.path.join(savedir,prefilename+filename+myformat)
+    if doleg == True: plt.legend()
     plt.savefig(fullpath,format=myformat)
+
+    return fig
 
 def plot_slices_one_inst(myslices,myformat='png'):
 

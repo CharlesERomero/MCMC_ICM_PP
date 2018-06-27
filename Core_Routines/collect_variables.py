@@ -36,7 +36,7 @@ dandt = time.strftime("%d-%b-%Y %H:%M:%S")
 ###########################################################################
 
 def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
-                            testmode=False, map_file='all'):
+                            testmode=False, map_file='all',reduc='PCA'):
 
     """
     This module is the overarching module to collect variables.
@@ -59,6 +59,7 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
     shocks = input_struct.shocks()  # Needs to be defined...
     bulk   = input_struct.bulk()    # Needs to be defined...
     ptsrcs = input_struct.ptsrc()   # Locations of point sources; not instrument-specific.
+    blobs  = input_struct.blob()   # Locations of point sources; not instrument-specific.
     dv = {}              # Data-related variables (e.g. maps)
     ifp= {}              # Individual fitting parameters (components to be treated individually).
     # Minimum and maximum of angular scales "probed" by your instruments
@@ -68,11 +69,23 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
     ninstptsrc = 0                         # The number of instruments for which to fit pt srcs.
     
     for instrument in instruments:
-        inputs = input_struct.files(instrument=instrument,map_file='all')
+        inputs = input_struct.files(instrument=instrument,map_file='all',reduction=reduc)
         ### Now, we can get the input data variables
         dv[instrument]  = data_vars(inputs,priors,mycluster,ptsrcs)
         ifp[instrument] = mfp.inst_fit_params(inputs,ptsrcs,instrument)
-        minmax = angular_range(minmax,dv[instrument].fwhm,dv[instrument].FoV)
+        ############## Let's think about what bins we can make #########################
+        goodpix = dv[instrument].maps.masked_wts > 0             ## These are the pixels this instrument
+        npix = len(dv[instrument].maps.masked_wts[goodpix])      ## is using.
+        mask_rad = (np.sqrt(npix/np.pi))*dv[instrument].mapping.pixsize ## Which defines a radial limit.
+        if mask_rad > dv[instrument].FoV/1.9:     ## And the FOV defines a transfer function radial limit.
+            max_extent = dv[instrument].FoV/1.9   ## So, which one is limiting the range that we can fit?
+        else:                                     ## 
+            max_extent = mask_rad                 ## With this figured out, we can look at other instruments too.
+
+        ### These minmax are for the bins. Here, I am taking the min and max across instruments
+        minmax = angular_range(minmax,dv[instrument].fwhm/2.0,max_extent) #dv[instrument].fwhm
+        
+        #print dv[instrument].mapping.pixsize,dv[instrument].FoV
         ### Mean levels figure into instrument-specific parameters.
         nifp += ifp[instrument].n_add_params # Number of instrument-specific parameters 
         if ifp[instrument].pt_src: ninstptsrc += 1
@@ -87,7 +100,11 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
     # A correction on the total number of dimensions:
     ### 20 Feb 2018 - This correction is true, but I had to make the common_fit_params
     ### routine in-line with this!
-    cfp.ndim += nifp + ninstptsrc*len(cfp.ptsrc)   
+    cfp.ndim += nifp + ninstptsrc*len(cfp.ptsrc)
+
+    print 'Using the following bins for the bulk profile: '
+    for bulkbins in cfp.bulkarc:
+        print bulkbins*u.rad.to("arcsec"), ' arcseconds'
   
     hk = housekeeping(cfp,priors,instruments,name,mycluster)
     ### OK, now...can we collect other "defaults"
@@ -134,6 +151,8 @@ class data_vars:
         self.fwhm = fwhm
         self.freq = freq
         self.FoV  = FoV
+        #self.rms_corr   = inputs.rmscorr
+        self.conversion = rdi.get_conv_factor(inputs.instrument)
         
 def print_attributes(myclass):
 

@@ -6,12 +6,23 @@ import numerical_integration as ni
 import cluster_pressure_profiles as cpp  # Not C++ !!!
 import my_astro_defaults as mad
 import cosmolopy.distance as cd
+import mapping_modules as mm
+import ellipsoidal_shells as es
+import os
+import retrieve_data_info as rdi
+import instrument_processing as ip
+import Azimuthal_Brightness_Profiles as ABP
 
 #import create_gNFW_maps as cgm
 cosmo,mycosmo = mad.get_cosmology("Concordance")
-M500 = 7.8 * 10**14* const.M_sun; z = 0.89   # For CLJ 1226
+#M500 = 7.8 * 10**14* const.M_sun; z = 0.89   # For CLJ 1226
 #z=1.99, M500=0.63 * 10**14* const.M_sun      # For Stefano's cluster
-d_a = cd.angular_diameter_distance(z, **cosmo) *u.Mpc
+
+def get_d_a(z):
+
+    d_a = cd.angular_diameter_distance(z, **cosmo) *u.Mpc
+
+    return d_a
 
 ####################################################################################
 
@@ -85,9 +96,11 @@ def compton_y_profile_from_m500_z(M500, z, mycosmo):
 
     return yprof, inrad
 
-def Y_cyl(yprof, radii, Rmax, d_ang = d_a):
+def Y_cyl(yprof, radii, Rmax, d_ang = 0, z=1.99):
 
-    print d_a
+    if d_ang == 0:
+        d_a = cd.angular_diameter_distance(z, **cosmo) *u.Mpc
+    
     try:
         angle = radii.to("rad")   # Try converting to radians.
         max_angle = Rmax.to("rad")
@@ -114,8 +127,11 @@ def Y_cyl(yprof, radii, Rmax, d_ang = d_a):
 
     return Ycyl
 
-def Y_sphere(myprof, radii, Rmax, d_ang = d_a):
+def Y_sphere(myprof, radii, Rmax, d_ang = 0, z=1.99):
     
+    if d_ang == 0:
+        d_ang = cd.angular_diameter_distance(z, **cosmo) *u.Mpc
+
     m_e_c2 = (const.m_e *const.c**2).to("keV")
     thom_cross = const.sigma_T
     unitless_profile = (myprof * thom_cross * u.kpc / m_e_c2).decompose()
@@ -142,5 +158,101 @@ def Y_sphere(myprof, radii, Rmax, d_ang = d_a):
 
 
 
-    
+def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,savedir=None,
+                    filename='gNFW_map.fits', instrument='MUSTANG2',T_e = 5.0,units='Jy',
+                    beta=0.0, betaz=0.0):
+    """
+    yprof         - A list/array of Compton y values
+    theta_range   - The associated array of radii (on the sky) in radians.
+    xsize         - map xsize in arcseconds
+    ysize         - map ysize in arcseconds
+    mappixsize    - pixel size, in arcseconds (on a side)
+    savedir       - A string saying where the save directory is
+    filename      - specifies the .fits file name
+    instrument    - the instrument filtering to be used
+    T_e           - assumed electron temperature
+    units         - The sky brightness units - either 'Jy' (for Jy/beam) or 'Kelvin'.
+    beta          - total speed of the cluster (as a fraction of c)
+    betaz         - spped of the cluster along the line of sight (+ is away from us)
 
+    """
+    
+    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = rdi.inst_params(instrument)
+    bv = rdi.get_beamvolume(instrument)
+    
+    xymap = mm.create_xymap(xsize=xsize,ysize=ysize,mappixsize=mappixsize,
+                            xcentre=[],ycentre=[])
+    
+    mymap = es.grid_profile(theta_range, yprof, xymap)
+    w     = mm.create_astro(mymap,mappixsize=mappixsize)
+    print fwhm
+
+    xfer_class = mm.xfer_fxn(instrument)
+    my_xfer    = rdi.get_xfer(xfer_class)
+    beam_conv  = ip.conv_gauss_beam(mymap,mappixsize,fwhm)
+    filt_img   = ip.apply_xfer(beam_conv, my_xfer,instrument)
+
+    tSZ,kSZ = rdi.get_sz_bp_conversions(T_e,instrument,units,array="2",
+                                        inter=False,beta=beta,betaz=betaz,rel=True)
+    Sky_Bright = filt_img * tSZ   # Map in measurable units (either Kelvin or Jy/beam)
+    
+    hdu   = mm.make_hdu(mymap, w, filt_img, Sky_Bright)
+
+    myhome = os.path.expanduser("~")
+    if type(savedir) == type(None):
+        savedir = os.path.join(myhome,'Results_Python/gNFW_profiles')
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+    fullpath = os.path.join(savedir,filename)
+    print fullpath
+    mm.write_hdu_to_fits(hdu,fullpath)
+
+    rmsmap = make_rmsMap(xymap,theta_range,target=25.0,conv=tSZ)
+    
+    fig=None
+    prefilename='HSC_DDT_3e14_z1p2_A10_plots'
+    #prefilename='HSC_DDT_1e14_z1p2_A10_plots'
+    for thismap,thislab in zip([mymap, filt_img, rmsmap],['Sky Map','Filtered Map','Scalable RMS']):
+
+        angmin = 0.0;  angmax = 2.0*np.pi
+        mythetamask = np.zeros(thismap.shape)
+
+        rads, prof, mythetamask = ABP.get_az_profile(thismap, xymap, angmin, angmax,
+                                                 thetamask=mythetamask)
+        mybins = np.arange(0.0,120.0,4.0)
+        binres = ABP.radial_bin(rads, prof,10,rmax=120.0,bins=mybins,minangle=angmin,maxangle=angmax,
+                                profunits='Compton y')
+        
+        fig    = ABP. plot_one_slice(binres,myformat='png',fig = fig,target='HSC_DDT',
+                                     savedir=savedir,prefilename=prefilename,mylabel=thislab)
+
+        if thislab == 'Scalable RMS':
+            bpixv = ((binres.npix*(mappixsize*u.arcsec)**2)/bv).decompose()
+            print bpixv
+            binres.profavg /= np.sqrt(bpixv.value)
+            thislab = 'SEM (same binning)'
+            import pdb;pdb.set_trace()
+            fig    = ABP. plot_one_slice(binres,myformat='png',fig = fig,target='HSC_DDT',
+                                         savedir=savedir,prefilename=prefilename,mylabel=thislab)
+
+            
+            
+        
+def make_rmsMap(xymap,theta_range,target=25.0,conv=1.0):
+    """
+    xymap      - you know!
+    target     - target sensitivity in uJy/beam
+    conv       - conversion factor (if you want it in Compton y)
+    """
+
+    arcrad   = theta_range * (u.rad).to('arcmin')
+    rms_stg1 =  1.0 + np.sin(arcrad*np.pi/8.0)*2.5         # Outer part should equal 3.5
+    rms_stg1 =  np.exp(1.0 - np.cos(arcrad*np.pi/8.0))     #
+    rms_prof =  (rms_stg1**2)*target*1.0e-6 /np.abs(conv)    # Inner part ~ 56 uJy
+
+    #import pdb;pdb.set_trace()
+    mymap = es.grid_profile(theta_range, rms_prof, xymap)
+
+    return mymap
+    
+    

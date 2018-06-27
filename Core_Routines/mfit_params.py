@@ -14,7 +14,7 @@ class common_fit_params:
                  shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
                  ptsrcs=[],psfwhm=[],
                  blobs=[],fbtemps=[False],fstemps=[False],
-                 minmax=np.array([20.0,50.0])*u.arcsec,
+                 minmax=np.array([2.0,100.0])*u.arcsec,
                  cluster=None,testmode='Test',autodetect=False):
 
     ##################################################################################
@@ -46,7 +46,13 @@ class common_fit_params:
 
         myshbins=[]
         anotset= (len(shockalp) == 0)
-        for mybins in shbins:
+        for scount,mybins in enumerate(shbins):
+            
+            if shockfin[scount] == True:
+                thesebins = mybins[:-1]
+            else:
+                thesebins = mybins
+                
             if mybins.unit.is_equivalent("kpc"):
                 mybins = convert_kpc_to_rad(mybins,cluster.d_a)
             elif mybins.unit.is_equivalent("rad"):
@@ -57,8 +63,8 @@ class common_fit_params:
             ### Create lists of the bin positions and power-law slope (default=0).
             myshbins.append(mybins)
             if anotset:
-                shockalp.append(np.zeros(len(mybins)))
-            totbins+=len(mybins)
+                shockalp.append(np.zeros(len(thesebins)))
+            totbins+=len(thesebins)
         myshbins = np.array(myshbins)    # This should work correctly now (05 Mar 2018)
                                     
     #########################################################################################
@@ -119,9 +125,9 @@ class common_fit_params:
 ### "Testing" values:
         ### Here is the longest I would think to do:
         if testmode == 'Long':
-            self.nwalkers= self.ndim *3
+            self.nwalkers= int(self.ndim *1.5)*2
             self.nsteps  = 5000
-            self.burn_in = 100
+            self.burn_in = 1500
         ### And here is a test mode which really just verifies that the code will run.
         elif testmode == 'Test':
             self.nwalkers= self.ndim *2 + 10   # Whatever...as it needs to be.
@@ -134,7 +140,7 @@ class common_fit_params:
             self.burn_in = 100
         ### This can be the "standard" ("Full") run:
         else:
-            self.nwalkers= self.ndim *3
+            self.nwalkers= int(self.ndim *1.5)*2
             self.nsteps  = 2500
             self.burn_in = 500
 

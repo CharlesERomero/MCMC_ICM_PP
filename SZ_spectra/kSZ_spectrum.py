@@ -273,7 +273,7 @@ def create_arrs_nonrel(beta,betaz,thetae,x,tarr=None,xarr=None,farr=None):
     factor = x**3 / (np.exp(x) - 1.0)       # Equation 2.16 in Nozawa+ 2000
     K1 = x*np.exp(x)/(np.exp(x)-1)
 
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         farr=betaz*factor*K1
@@ -291,7 +291,7 @@ def create_arrs_rel(beta,betaz,thetae,x,tarr=None,xarr=None,farr=None):
           ksz_C_terms(beta, betaz, thetae, x) +\
           ksz_D_terms(beta, betaz, thetae, x)
     
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         farr=np.array(dnn)*factor

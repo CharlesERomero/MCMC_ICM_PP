@@ -1,6 +1,7 @@
 import numpy as np
 from astropy.io import fits
-from astropy.wcs import WCS
+#from astropy.wcs import WCS
+from astropy import wcs   # A slight variation...
 import tSZ_spectrum as tsz
 import kSZ_spectrum as ksz
 import astropy.units as u
@@ -106,8 +107,11 @@ def inst_bp(instrument,array="2"):
             
         farr = np.arange(flow,fhig,1.0)  # frequency array.
         tran = farr*0.0 + 1.0            # Let the transmission be unity everywhere.
-        Larr = const.c.value/(farr*1.0e9) # Keep calm and carry on.        
-        Ruze = Gnot * np.exp(-4.0*np.pi*(srms.value)/Larr)
+        Larr = const.c.value/(farr*1.0e9) # Keep calm and carry on.
+        ### Old formula:
+        #Ruze = Gnot * np.exp(-4.0*np.pi*(srms.value)/Larr)
+        ### Correct formula: (10 April 2018)
+        Ruze = Gnot * np.exp(-(4.0*np.pi*srms.value/Larr)**2)
         NRuz = Ruze / np.max(Ruze)        # Normalize it
         band = tran * Ruze                # Bandpass, with (unnormalized) Ruze efficiency
        
@@ -172,51 +176,38 @@ class maps:
         print 'Reading in data from: ',inputs.fitsfile
         data_map, header = fits.getdata(inputs.fitsfile, header=True)
         wt_map = fits.getdata(inputs.wtfile,inputs.wtext)
+        #if np.max(wt_map) > 1.0e3:
+        #    print 'It looks like your weight map is in (1/Jy)^2 or (1/K)^2'
+            
+        
         if inputs.wtisrms == True: 
             wt_map = wt_map**(-2.0)  # I'll need to account for zeros...
+
+        wt_map /= (inputs.rmscorr**2)
+
         self.data   = data_map
         self.header = header
         self.wts    = wt_map
         self.masked_wts = wt_map
+            
         self.units  = inputs.units
+        self.name   = inputs.name
 
         if inputs.instrument == "MUSTANG" or inputs.instrument == "MUSTANG2":
-            keep=np.where(wt_map > np.median(wt_map))
-            mask=np.where(wt_map < np.median(wt_map))
+            if inputs.units == 'Jy' or np.max(wt_map) < 1.0e3:
+                self.wts    = wt_map*1.0e6
+                self.masked_wts = wt_map*1.0e6
+            nzwts = (wt_map > 0)
+            keep=np.where(wt_map > np.median(wt_map[nzwts])/2.0)
+            mask=np.where(wt_map < np.median(wt_map[nzwts])/2.0)
             gwts = wt_map[keep]
             npix = len(gwts)
             print 'FYI: with a mask threshold of median(wt_map), we use ',npix,\
                 'pixels, which is roughly equivalent to a circle of radius ',\
-                "{:7.1f}".format(np.sqrt(npix)/np.pi),' pixels.'
+                "{:7.1f}".format(np.sqrt(npix/np.pi)),' pixels.'
             
             self.masked_wts[mask] = 0.0
         
-#        if not(inputs.psfile == None):
-#            self.ptsrc,self.pshdr = fits.getdata(inputs.psfile, header=True)
-#        else:
-#            self.ptsrc,self.pshdr = None,None
-#        if not(inputs.shfile == None):
-#            self.shock,self.shhdr = fits.getdata(inputs.shfile, header=True)
-#        else:
-#            self.shock,self.shhdr = None,None
-#        if not(inputs.blfile == None):
-#            self.blob,self.blhdr = fits.getdata(inputs.blfile, header=True)
-#        else:
-#            self.blob,self.blhdr = None,None
-#        if not(inputs.miscfile1 == None):
-#            self.misc1,self.misc1hdr = fits.getdata(inputs.miscfile1, header=True)
-#        else:
-#            self.misc1,self.mis1hdr = None,None
-#        if not(inputs.miscfile2 == None):
-#            self.misc2,self.misc2hdr = fits.getdata(inputs.miscfile2, header=True)
-#        else:
-#            self.misc2,self.mis2hdr = None,None
-#        if not(inputs.miscfile3 == None):
-#            self.misc3,self.misc3hdr = fits.getdata(inputs.miscfile3, header=True)
-#        else:
-#            self.misc3,self.mis3hdr = None,None
-
-
 def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,beta=1.0/300.0,
                           betaz=1.0/300.0,rel=True,quiet=False):
 
@@ -302,7 +293,7 @@ def get_maps_and_info(instrument,target,real=True):
         wt_map = 1.0/wt_map**2
 
     image_data, ras, decs, hdr, pixs = get_astro(fitsfile)
-    w = WCS(fitsfile)
+    w = wcs.WCS(fitsfile)
     
     return data_map, wt_map, header, ras, decs, pixs, w, tab
 
@@ -372,23 +363,31 @@ def astro_from_hdr(hdr):
     xar = np.outer(np.arange(xsz),np.zeros(ysz)+1.0)
     yar = np.outer(np.zeros(xsz)+1.0,np.arange(ysz))
     ####################
+
+    w = wcs.WCS(hdr)
+    #import pdb;pdb.set_trace()
     
     xcen = hdr['CRPIX1']
     ycen = hdr['CRPIX2']
     dxa = xar - xcen
     dya = yar - ycen
     ### RA and DEC in degrees:
+    if 'CDELT1' in hdr.keys():
+        ras = dxa*hdr['CDELT1'] + hdr['CRVAL1']
+        decs= dya*hdr['CDELT2'] + hdr['CRVAL2']
+        pixs= abs(hdr['CDELT1'] * hdr['CDELT2'])**0.5 * 3600.0    
     if 'CD1_1' in hdr.keys():
         ras = dxa*hdr['CD1_1'] + dya*hdr['CD2_1'] + hdr['CRVAL1']
         decs= dxa*hdr['CD1_2'] + dya*hdr['CD2_2'] + hdr['CRVAL2']
         pixs= abs(hdr['CD1_1'] * hdr['CD2_2'])**0.5 * 3600.0
-    if 'PC1_1'  in hdr.keys():
-        ras = dxa*hdr['PC1_1']*hdr['CDELT1'] + \
-              dya*hdr['PC2_1']*hdr['CDELT2'] + hdr['CRVAL1']
-        decs= dxa*hdr['PC1_2']*hdr['CDELT1'] + \
-              dya*hdr['PC2_2']*hdr['CDELT2'] + hdr['CRVAL2']
-        pixs= abs(hdr['PC1_1']*hdr['CDELT1'] * \
-                  hdr['PC2_2']*hdr['CDELT2'])**0.5 * 3600.0
+    if 'PC1_1' in hdr.keys():
+        pcmat = w.wcs.get_pc()
+        ras = dxa*pcmat[0,0]*hdr['CDELT1'] + \
+              dya*pcmat[1,0]*hdr['CDELT2'] + hdr['CRVAL1']
+        decs= dxa*pcmat[0,1]*hdr['CDELT1'] + \
+              dya*pcmat[1,1]*hdr['CDELT2'] + hdr['CRVAL2']
+        pixs= abs(pcmat[0,0]*hdr['CDELT1'] * \
+                  pcmat[1,1]*hdr['CDELT2'])**0.5 * 3600.0
 
     pixs = pixs*u.arcsec
     ### Do I want to make ras and decs Angle objects??
@@ -442,3 +441,33 @@ def get_xfer(inputs):
 
 ############################################################################
 
+def get_conv_factor(instrument):
+    
+    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
+    #freq = 90.0 * u.GHz;     instrument='MUSTANG2'
+    szcv,szcu = mad.get_sz_values()
+    x = szcv["planck"]*(freq.to("Hz")).value / (szcv["boltzmann"]*szcv["tcmb"])
+    bv = get_beamvolume(instrument)
+
+    fofx = x * (np.exp(x) + 1.0)/(np.exp(x) - 1.0) - 4.0 # Delta T / T * y
+    gofx = fofx * x**4 * np.exp(x) / (np.exp(x) - 1)**2  # Delta I / I * y
+
+    B_nu = 2.0*((const.h*freq**3)/(const.c**2 * u.sr)).decompose()
+    B_nu *= 1.0/(np.exp(x) - 1.0)
+    JyperSrK = (B_nu/(szcv["tcmb"]*u.K)).to("Jy / (K sr)")
+    JyperAsK = JyperSrK.to("Jy / (K arcsec2)")
+    
+    ### This value assumes true black-body spectrum:
+    JyperK_SZ = JyperAsK*bv*gofx/fofx
+
+    ### Radiance per Kelvin:
+    I_per_K = 2.0*freq**2 * const.k_B / (const.c**2 * u.sr)
+    IpK = I_per_K.to("Hz J s / (K m2 sr)")
+    WperSr = IpK.to("W / (Hz K m2 sr)")
+    JyperSr = WperSr.to("Jy / (K sr)")
+    Jy_per_K_as = JyperSr.to("Jy / (K arcsec2)")
+
+    ###  And this one assumes the RJ law:
+    JyperK_RJ = Jy_per_K_as*bv
+
+    return JyperK_RJ

@@ -13,10 +13,10 @@ def savemap(mymap,filename,wtmap=None,header=None):
     hdulist.info()
     hdulist.writeto(filename,overwrite=True,output_verify="exception")
 
-def saveimg(dv,hk,efv,modelmap=None,weightmap=None,
+def saveimg(dv,hk,efv,ifp,modelmap=None,weightmap=None,
             component='Bulk',filename="Map.fits"):
 
-    hdu = make_and_save_model_maps(hk,dv,efv)
+    hdu = make_and_save_model_maps(hk,dv,efv,ifp)
 
     return hdu
 
@@ -38,18 +38,23 @@ def clear_maps(maps,hk,dv):
         nx,ny = dv[myinst].mapping.radmap.shape
         maps[myinst]=np.zeros((nx,ny))
 
-def make_and_save_model_maps(hk,dv,efv):
+def make_and_save_model_maps(hk,dv,efv,ifp):
 
-    pos = efv.values # Given as is...
+    #pos = efv.values           # In pressure units (keV cm**-3)
+    pos = efv.solns[:,0]       # Correct units...the unitless kind, mostly
     posind = 0;  parbycomp={}  #; indbycomp={}
     zeromaps={}; component={}; maps=[]; yint=[]; outalphas=[]; hdu={}; mapind=0
    
-    
+    mnlvlmaps,ptsrcmaps,maps,yint,outalphas = mlf.make_skymodel_maps(pos,hk,dv,ifp,efv)
+    ytotint = np.sum(yint) # I don't know how I would actually distinguish multiple yints...
+    ycyl=ytotint*((hk.cluster.d_a.value/1000.0)**2) # Now in Mpc**-2 (should be a value of ~10 e-5)
+    models = mlf.filter_maps(hk,dv,maps,ptsrcmaps,mnlvlmaps)
+
     tstr = 'Test_Run_'
     #if hk.cfp.testmode == False:
     #    tstr = 'Full_Run_'
     tstr = hk.cfp.testmode+'_Run_'
-
+    myresid={}
     
     for myinst in hk.instruments:
         ### Set up the necessary variables for the model map(s) of each instrument
@@ -59,12 +64,14 @@ def make_and_save_model_maps(hk,dv,efv):
         parbycomp[myinst]={'mnlvl':pos[posind]}
         parbycomp[myinst]={'mnlvl_ind':np.array([posind])}
         posind+=1
-        hdu[myinst] = []
-
         ### And go ahead and setup the primary header (data unit)
+        hdu[myinst] = []
+        myresid[myinst] = dv[myinst].maps.data-models[myinst]
 
-    maps=[component] 
-    conc_hdu(dv,hk,maps[mapind],title='Mean_Level',hdu=hdu); mapind+=1
+    conc_hdu(dv,hk,myresid,title='residual',hdu=hdu) #; mapind+=1
+
+    maps=[component]       #title='Mean_Level'
+    conc_hdu(dv,hk,maps[mapind],title='mnlvl',hdu=hdu); mapind+=1
     clear_maps(zeromaps,hk,dv)
 
     ### Model the bulk pressure:
@@ -86,8 +93,8 @@ def make_and_save_model_maps(hk,dv,efv):
         
     ### Model any shocks:
     count=1
-    for bins,fit_cen,geo,alp,narm in zip(hk.cfp.shockbin,hk.cfp.shoc_centroid,hk.cfp.shockgeo,
-                                         hk.cfp.shockalp,hk.cfp.shocknarm):
+    for bins,fit_cen,geo,alp,narm,sfin in zip(hk.cfp.shockbin,hk.cfp.shoc_centroid,hk.cfp.shockgeo,
+                                         hk.cfp.shockalp,hk.cfp.shocknarm,hk.cfp.shockfin):
         compname = 'Shock'+str(count)
         nbins = len(bins)
         if hk.cfp.shockfin[count-1] == True:
@@ -96,7 +103,7 @@ def make_and_save_model_maps(hk,dv,efv):
         parbycomp[myinst][compname+'_bins']=bins
         parbycomp[myinst][compname+'_ind']=np.arange(posind,posind+nbins)
         outmaps,posind,shint,shout = mlf.bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,zeromaps,posind,
-                                                                 fixalpha=hk.cfp.shockfix,finite=hk.cfp.shockfin)
+                                                                 fixalpha=hk.cfp.shockfix,finite=sfin)
         maps.append(outmaps)
         conc_hdu(dv,hk,maps[mapind],title='Shock',hdu=hdu,count=count); mapind+=1
         clear_maps(zeromaps,hk,dv)
@@ -108,6 +115,8 @@ def make_and_save_model_maps(hk,dv,efv):
         compname = 'PtSrc'+str(count)
         parbycomp[myinst][compname]=pos[posind]
         parbycomp[myinst][compname+'_ind']=np.array([posind])
+        print 'Position index used for point source: ',posind,' with flux ',pos[posind]
+        print pos
         #outmaps,posind = mlf.mk_ptsrc(pos,posind,myptsrc,hk,dv,zeromaps)
         outmaps,posind = mlf.mk_ptsrc_v2(pos,posind,hk,dv,efv.ifp,zeromaps)
         #import pdb;pdb.set_trace()
@@ -128,6 +137,9 @@ def make_and_save_model_maps(hk,dv,efv):
         maps.append(outmaps)
         conc_hdu(dv,hk,maps[mapind],title='Blob',hdu=hdu,count=count); mapind+=1
         clear_maps(zeromaps,hk,dv)
+
+        
+
         
     write_hdu_to_fits(hk,tstr,hdu)
     efv.paramdict = parbycomp

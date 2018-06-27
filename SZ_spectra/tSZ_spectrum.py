@@ -460,7 +460,7 @@ def create_arrs_nonrel(thetae,x,tarr=None,xarr=None,farr=None):
 
     factor = x**3 / (np.exp(x) - 1.0)       # Equation 2.16 in Nozawa+ 2000
     
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         farr=np.array(fnonrel(thetae,x))*factor
@@ -474,7 +474,7 @@ def create_arrs_lowrel(thetae,x,tarr=None,xarr=None,farr=None):
 
     factor = x**3 / (np.exp(x) - 1.0)       # Equation 2.16 in Nozawa+ 2000
     
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         farr=np.array(fink(thetae,x))*factor
@@ -486,7 +486,7 @@ def create_arrs_lowrel(thetae,x,tarr=None,xarr=None,farr=None):
 
 def create_arrs_modrel(thetae,x,tarr=None,xarr=None,farr=None):
     factor = x**3 / (np.exp(x) - 1.0)       # Equation 2.16 in Nozawa+ 2000
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         farr=np.array(fink(thetae,x)+nozawa_r(thetae,x))*factor
@@ -498,7 +498,7 @@ def create_arrs_modrel(thetae,x,tarr=None,xarr=None,farr=None):
 
 def create_arrs_Mrel_Hacc(thetae,x,tarr=None,xarr=None,farr=None):
     factor = x**3 / (np.exp(x) - 1.0)       # Equation 2.16 in Nozawa+ 2000
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         farr=np.array(fink(thetae,x)+itoh_2002_r(thetae,x))*factor
@@ -512,7 +512,7 @@ def create_arrs_higrel(thetae,x,tarr=None,xarr=None,farr=None):
     X0 = 3.830*(1.0 + 1.1674*thetae - 0.8533*thetae**2)
     Gfact = thetae * x**2 * np.exp(-x) * (x - X0)
 #    Ffact = x**3 / (np.exp(x) - 1.0) 
-    if tarr == None:
+    if type(tarr) == type(None):
         tarr=np.array(thetae)
         xarr=np.array(x)
         ### No need to use FINK() ??
