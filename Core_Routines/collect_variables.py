@@ -72,7 +72,7 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
         inputs = input_struct.files(instrument=instrument,map_file='all',reduction=reduc)
         ### Now, we can get the input data variables
         dv[instrument]  = data_vars(inputs,priors,mycluster,ptsrcs)
-        ifp[instrument] = mfp.inst_fit_params(inputs,ptsrcs,instrument)
+        ifp[instrument] = mfp.inst_fit_params(inputs,ptsrcs,blobs,instrument)
         ############## Let's think about what bins we can make #########################
         goodpix = dv[instrument].maps.masked_wts > 0             ## These are the pixels this instrument
         npix = len(dv[instrument].maps.masked_wts[goodpix])      ## is using.
@@ -95,8 +95,10 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
     cfp = mfp.common_fit_params(bins=bulk.bins,shbins=shocks.bins,path=path,
                                 shockgeo=shocks.geoparams,shockfin=shocks.shockfin,
                                 ptsrcs=ptsrcs.locs,psfwhm=ptsrcs.fwhm,testmode=testmode,
-                                fbtemps=bulk.fbtemps,fstemps=shocks.fstemps,
-                                minmax=minmax,cluster=mycluster)
+                                fbtemps=bulk.fbtemps,fstemps=shocks.fstemps,blobs=blobs.blobpars,
+                                blobcens=[blobs.ra,blobs.dec],
+                                minmax=minmax,cluster=mycluster,fitbulkcen=bulk.fit_cen,
+                                fitbulkgeo=bulk.fit_geo)
     # A correction on the total number of dimensions:
     ### 20 Feb 2018 - This correction is true, but I had to make the common_fit_params
     ### routine in-line with this!
@@ -140,7 +142,21 @@ class data_vars:
         self.astro = rdi.astrometry(self.maps.header)
         self.xfer  = rdi.get_xfer(inputs)
         self.xferdims = inputs.tabdims
-        tSZ,kSZ = rdi.get_sz_bp_conversions(priors.Tx,inputs.instrument,inputs.units,array="2",
+        
+        try:
+            Jy2K = self.maps.header['JY2K']
+        except:
+            Jy2K = -1.0
+
+        if Jy2K > 0:
+            bv = rdi.get_bv_from_Jy2K(Jy2K,inputs.instrument)
+        else:
+            bv = get_beamvolume(inputs.instrument)
+            
+        self.Jy2K = Jy2K # Divide by this factor to go Jy -> K
+        self.bv   = bv
+        
+        tSZ,kSZ = rdi.get_sz_bp_conversions(priors.Tx,inputs.instrument,bv,inputs.units,array="2",
                                             inter=False,beta=beta,betaz=betaz,rel=True)
         av = mad.all_astro()     # av = astro vars
         self.mapping = mapping_info(mycluster,inputs,priors,av,tSZ,kSZ,ptsrcs)

@@ -38,12 +38,13 @@ myhome = expanduser("~")
 instrument='MUSTANG2'; savedir=myhome+'/Results_Python'
 testmode='Full'; nthreads=1
 
-name='2xmm'; reduc='PCA'
+#name='2xmm'; reduc='PCA'
+name='idcs'; reduc='PCA'
 #name='rdcs0910'; reduc='PCA'
 #name='rxj1053'; reduc='CMCORR'
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
-tag=reduc+'_v2_'
+tag=reduc+'_ptsrcs_'
 ################ Get parameters for fitting procedure: ####################
 hk,dv,ifp= cv.get_struct_of_variables([instrument],name,savedir,testmode=testmode,
                                       reduc=reduc)

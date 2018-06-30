@@ -76,14 +76,14 @@ def make_and_save_model_maps(hk,dv,efv,ifp):
 
     ### Model the bulk pressure:
     count=1
-    for bins,fit_cen,geo,alp,narm in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulkgeo,
+    for bins,fit_cen,fit_geo,geo,alp,narm in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulk_geometry,hk.cfp.bulkgeo,
                                          hk.cfp.bulkalp,hk.cfp.bulknarm):
         compname = 'Bulk'+str(count)
         nbins = len(bins)
         parbycomp[myinst][compname]=pos[posind:posind+nbins]
         parbycomp[myinst][compname+'_bins']=bins # bins are in radians!
         parbycomp[myinst][compname+'_ind']=np.arange(posind,posind+nbins)
-        outmaps,posind,ynt,myalphas = mlf.bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,zeromaps,posind,
+        outmaps,posind,ynt,myalphas = mlf.bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geo,alp,narm,zeromaps,posind,
                                               fixalpha=hk.cfp.bulkfix)
         maps.append(outmaps)
         yint.append(ynt); outalphas.extend(myalphas)
@@ -97,12 +97,13 @@ def make_and_save_model_maps(hk,dv,efv,ifp):
                                          hk.cfp.shockalp,hk.cfp.shocknarm,hk.cfp.shockfin):
         compname = 'Shock'+str(count)
         nbins = len(bins)
+        fit_geo = [False]
         if hk.cfp.shockfin[count-1] == True:
             nbins-=1
         parbycomp[myinst][compname]=pos[posind:posind+nbins]
         parbycomp[myinst][compname+'_bins']=bins
         parbycomp[myinst][compname+'_ind']=np.arange(posind,posind+nbins)
-        outmaps,posind,shint,shout = mlf.bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,zeromaps,posind,
+        outmaps,posind,shint,shout = mlf.bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geo,alp,narm,zeromaps,posind,
                                                                  fixalpha=hk.cfp.shockfix,finite=sfin)
         maps.append(outmaps)
         conc_hdu(dv,hk,maps[mapind],title='Shock',hdu=hdu,count=count); mapind+=1
@@ -111,14 +112,18 @@ def make_and_save_model_maps(hk,dv,efv,ifp):
 
     ### Model any point sources (hk.cfp.ptsrc is a 2-tuple, the pt src. centroid):
     count=1
-    for myptsrc in hk.cfp.ptsrc:
+    #for myptsrc in hk.cfp.ptsrc:
+    if ifp[myinst].pt_src == True:
         compname = 'PtSrc'+str(count)
+        #print posind
         parbycomp[myinst][compname]=pos[posind]
         parbycomp[myinst][compname+'_ind']=np.array([posind])
+        #parbycomp[myinst][compname+'_ind']=np.arange([posind])
         print 'Position index used for point source: ',posind,' with flux ',pos[posind]
         print pos
         #outmaps,posind = mlf.mk_ptsrc(pos,posind,myptsrc,hk,dv,zeromaps)
-        outmaps,posind = mlf.mk_ptsrc_v2(pos,posind,hk,dv,efv.ifp,zeromaps)
+        outmaps,posind = mlf.mk_ptsrc_v2(pos,posind,efv.ptsrcsign,hk,dv,efv.ifp,zeromaps)
+        #print 'One more time ',posind
         #import pdb;pdb.set_trace()
         maps.append(outmaps)
         conc_hdu(dv,hk,maps[mapind],title='PtSrc',hdu=hdu,count=count); mapind+=1
@@ -129,11 +134,12 @@ def make_and_save_model_maps(hk,dv,efv,ifp):
     ### This is currently not functional because I'm not sure exactly how I want to implement
     ### this feature.
     count=1
-    for myblob in hk.cfp.blob:
+    for myblob,mysign in zip(hk.cfp.blob,efv.blobsign):
         compname = 'Blob'+str(count)
-        parbycomp[myinst][compname]=pos[posind:posind+3]
-        parbycomp[myinst][compname+'_ind']=np.arange(posind,posind+3)
-        outmaps,posind = mlf.mk_twodgauss(pos,posind,myptsrc,hk,dv,zeromaps)
+        nblobbins = len(myblob)
+        parbycomp[myinst][compname]=pos[posind:posind+nblobbins]
+        parbycomp[myinst][compname+'_ind']=np.arange(posind,posind+nblobbins)
+        outmaps,posind = mlf.mk_twodgauss(pos,posind,mysign,hk,dv,zeromaps)
         maps.append(outmaps)
         conc_hdu(dv,hk,maps[mapind],title='Blob',hdu=hdu,count=count); mapind+=1
         clear_maps(zeromaps,hk,dv)

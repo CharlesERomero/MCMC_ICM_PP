@@ -127,7 +127,9 @@ class xfer_fxn:
     
         if instrument == "MUSTANG2":
             m2dir            = '/home/data/MUSTANG2/'
-            self.tabfile     = m2dir+"AGBT17_Products/pca7_f0.09_onHSC_2.txt"
+            #self.tabfile     = m2dir+"AGBT17_Products/pca7_f0.09_onHSC_2.txt"
+            #self.tabfile     = m2dir+"IDL_Xfer_Fxns/Xfer_2XMMJ0830+5241.txt"
+            self.tabfile     = m2dir+"IDL_Xfer_Fxns/2XMMJ0830+5241_highres_xfer.txt"
             self.tabcomments = '#'
             self.tabformat   = 'ascii'
             self.tabdims     = '1D'

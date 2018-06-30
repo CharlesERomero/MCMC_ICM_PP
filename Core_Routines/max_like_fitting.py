@@ -47,17 +47,19 @@ class emcee_fitting_vars:
         
         ### Get initial guess for the pressure of your bulk component(s):
 
-        myval  = []   # 
-        myalp  = []   #
-        sbepos = []   # Boolean array indicating whether myval should be positive or not.
-        priors = []   # An array of priors.
-        priunc = []   # If prior unc < 0, then there is no actual prior.
-        compname=[]   #
+        myval     = []   # 
+        myalp     = []   #
+        sbepos    = []   # Boolean array indicating whether myval should be positive or not.
+        priors    = []   # An array of priors.
+        priunc    = []   # If prior unc < 0, then there is no actual prior.
+        compname  = []   #
+        blobsign  = []
+        ptsrcsign = []
         ### Integral(P*dl) to Compton y (for dl given in radians):
         Pdl2y = (hk.av.szcu['thom_cross']*hk.cluster.d_a/hk.av.szcu['m_e_c2']).to("cm**3 keV**-1")
         R500 = (hk.cluster.R_500/hk.cluster.d_a).decompose()
         
-        nshockp = 0; nmnlvl = 0; nbulkp = 0; nblob = 0; ncent=0; nptsrc=0
+        nshockp = 0; nmnlvl = 0; nbulkp = 0; nblob = 0; ncent=0; nptsrc=0; ngeo=0
         minpixs = 10.0 #(arseconds); minimum pixel size among instruments (TBD)
 
         for myinst in hk.instruments:
@@ -99,7 +101,7 @@ class emcee_fitting_vars:
         ### are modelled jointly. Maybe I want to do the same with [5], depending
         ### on the supposed physical origin.
         
-        for bulkbins,fit_cen in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid):
+        for bulkbins,fit_cen,fit_geo in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulk_geometry):
             a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,bulkbins)
             uless_p = (a10pres*Pdl2y).decompose().value
             myval.extend(uless_p)
@@ -117,8 +119,18 @@ class emcee_fitting_vars:
                 sbepos.extend([False,False])
                 priors.extend([0.0,0.0])
                 priunc.extend([-1.0,-1.0])
-                compname.extend(['Bulk_Centroid','Bulk_Centroid'])
+                compname.extend(['bulk','bulk']) # Important to keep this in the same compname!
                 ncent+=2
+
+            if fit_geo == True:
+                myval.extend([1.0,1.0]) # In particular, how much should I allow this to vary?
+                #myalp.extend([0.0,0.0]) # In particular, how much should I allow this to vary?
+                # What units am I using for this?? (arcseconds? Pixel size? radians?)
+                sbepos.extend([True,True])
+                priors.extend([0.0,0.0])
+                priunc.extend([-1.0,-1.0])
+                compname.extend(['bulk','bulk']) # Important to keep this in the same compname!
+                ngeo+=2
                 
 
         for scount,shockbins in enumerate(hk.cfp.shockbin):
@@ -163,8 +175,13 @@ class emcee_fitting_vars:
                             else:
                                 print 'Looks like you have some weird units their bud.'
                                 print 'I will just let the errors occur. You have been warned.'
-                                
-                        myval.extend([ptpr.value]); priors.extend([ptpr.value])
+
+
+                        ptsign = -1.0 if ptpr.value < 0 else 1.0
+                        ptpr *= ptsign
+                        ptsrcsign.extend([ptsign])
+                        myval.extend([ptpr.value]);
+                        priors.extend([ptpr.value])
                         priunc.extend([ptun.value])
                             
                     except:
@@ -175,42 +192,57 @@ class emcee_fitting_vars:
                     compname.extend(['ptsrc'])
                     nptsrc+=1
 
-        for myblob in hk.cfp.blob:
+        for myblob,bra0,bdec0 in zip(hk.cfp.blob,hk.cfp.bras,hk.cfp.bdecs):
+
             for myinst in hk.instruments:
                 if ifp[myinst].fitblob == True:
-                    myval.extend([1.0,1.0,1.0,1.0,1.0,1.0]) 
-                    priors.extend([1.0,1.0,1.0,1.0,1.0,1.0])
-                    priunc.extend([-1.0,-1.0,-1.0,-1.0,-1.0,-1.0])
-                    sbepos.extend([True,True,True,True,True,True])
+                    #import pdb;pdb.set_trace()
+                    if bra0 != 0:
+                        myra0 = bra0.to('deg'); mydec0 = bdec0.to('deg')
+                        bx0 ,by0 = dv[myinst].mapping.w.wcs_world2pix(myra0,mydec0,0)
+                        myblob[0]=np.asscalar(bx0 - dv[myinst].mapping.x0)
+                        myblob[1]=np.asscalar(by0 - dv[myinst].mapping.y0)
+                    print myblob
+                    if myblob[-1] < 0:
+                        blobsign.extend([-1.0])
+                        myblob[-1] *= -1
+                    else:
+                        blobsign.extend([1.0])
+                    myval.extend(myblob) 
+                    priors.extend(myblob)
+                    priunc.extend([1.0,1.0,2.0,2.0,-1.0,-1.0])
+                    sbepos.extend([False,False,True,True,True,True])
                     compname.extend(['blob','blob','blob','blob','blob','blob'])
                     nblob+=6
 
         ### Some attributes for starting conditions / model creation.
-        self.alphas  = myalp
-        self.pinit   = myval
-        self.thetas  = theta_range
-        self.thetamax= tnx[1]    # Maximum angular scale in profile (radians)
-        self.thetamin= tnx[0]    # Minimum angular scale in profile (radians)
-        self.Pdl2y   = Pdl2y     # Conversion of unitless pressure to y?
-        self.sbepos  = sbepos    # Boolean list of whether something should be positive.
-        self.priors  = priors    # List of prior "known" values
-        self.priunc  = priunc    # List of uncertainties on priors.
-        self.compname= compname  # List of component names
+        self.alphas    = myalp
+        self.pinit     = myval
+        self.thetas    = theta_range
+        self.thetamax  = tnx[1]    # Maximum angular scale in profile (radians)
+        self.thetamin  = tnx[0]    # Minimum angular scale in profile (radians)
+        self.Pdl2y     = Pdl2y     # Conversion of unitless pressure to y?
+        self.sbepos    = sbepos    # Boolean list of whether something should be positive.
+        self.priors    = priors    # List of prior "known" values
+        self.priunc    = priunc    # List of uncertainties on priors.
+        self.compname  = compname  # List of component names
+        self.blobsign  = blobsign  # Positive or Negative?
+        self.ptsrcsign = ptsrcsign
         ### Some attributes for the results:
-        self.t_mcmc  = 0.0       # Time that MCMC took.
-        self.samples = None
-        self.solns   = None
-        self.psolns  = None
-        self.values  = None
-        self.errors  = None
-        self.nthreads= np.min([nthreads,ncpus])     # Number of threads to run over with emcee.
+        self.t_mcmc    = 0.0       # Time that MCMC took.
+        self.samples   = None
+        self.solns     = None
+        self.psolns    = None
+        self.values    = None
+        self.errors    = None
+        self.nthreads  = np.min([nthreads,ncpus])     # Number of threads to run over with emcee.
         ### I'm not sure if this is a good idea (for being more compact) or not.
         ### I think it should be fine. (WRT ifp variable) 21 Feb 2018.
-        self.ifp     = ifp     # Carry around IFP within this class! 
-        self.paramdict ={}
-        self.punits  = "keV cm**-3"
-        self.runits  = "arcsec"
-        self.tag = tag
+        self.ifp       = ifp     # Carry around IFP within this class! 
+        self.paramdict = {}
+        self.punits    = "keV cm**-3"
+        self.runits    = "arcsec"
+        self.tag       = tag
         ######################################################################################
         print '#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-'
         print 'Found the following number of parameters to be fit for each type of component:'
@@ -219,11 +251,12 @@ class emcee_fitting_vars:
         print 'Shock pressure: ', nshockp
         print 'Point Source Amplitudes: ', nptsrc
         print 'Centroids (any component): ', ncent
-        print 'Gaussian (blob) components: ', nblob
+        print 'Gaussian (blob) components: ', nblob, ' (this includes its own centroid)'
+        print 'Bulk Geometry parameters: ', ngeo
         print '#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-'
         #import pdb;pdb.set_trace()
         
-def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,maps={},posind=0,
+def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geom,alphas,n_at_rmin,maps={},posind=0,
                             fixalpha=False,fullSZcorr=False,SZtot=False,columnDen=False,Comptony=True,
                             finite=False,oldvs=False):
 
@@ -237,6 +270,11 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,map
     posind = posind+nbins
     if fit_cen == True:
         geom[0:2] = pos[posind:posind+2]  # I think this is what I want...
+        posind = posind+2
+
+    if fit_geo == True:
+        geom[2:4] = pos[posind:posind+2]
+        pos[posind] = pos[posind] % (2.0*np.pi) #if tdtheta > 2.0*np.pi
         posind = posind+2
 
     density_proxy, etemperature, geoparams = es.prep_SZ_binsky(ulesspres,hk.hk_ins.Tx,geoparams=geom)
@@ -290,30 +328,32 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geom,alphas,n_at_rmin,map
 #
 #    return maps
 
-def mk_twodgauss(pos,posind,centroid,hk,dv,maps={}):
+def mk_twodgauss(pos,posind,mysign,hk,dv,maps={}):
 
     ### UNDER DEVELOPMENT!
     for myinst in hk.instruments:
         x,y     = dv[myinst].mapping.xymap            # Defined in arcseconds
         x0,y0,sx,sy,tdtheta,peak =  pos[posind:posind+6]
         xcoord  = (x - x0)/sx;  ycoord= (y - y0)/sy
-        xrot = xcoord * cos (tdtheta) + ycoord * sin(tdtheta)
-        yrot = ycoord * cos (tdtheta) - xcoord * sin(tdtheta)
+        xrot = xcoord * np.cos (tdtheta) + ycoord * np.sin(tdtheta)
+        yrot = ycoord * np.cos (tdtheta) - xcoord * np.sin(tdtheta)
         mygauss = np.exp(((-(xrot)**2 - (yrot)**2) )/(2.0))
-        maps[myinst] += mygauss
+        maps[myinst] += mygauss*peak*mysign
+        #print peak,min(maps[myinst])
+        #import pdb;pdb.set_trace()
         pos[posind+4] = tdtheta % (2.0*np.pi) #if tdtheta > 2.0*np.pi
         posind += 6
 
-    return maps
+    return maps,posind
 
 ### Need to rewrite this to correctly deal with point source.
-def mk_ptsrc_v2(pos,posind,hk,dv,ifp,maps={}):
+def mk_ptsrc_v2(pos,posind,mysign,hk,dv,ifp,maps={}):
 
     for index in range(len(hk.cfp.ptsrc)):
         for myinst in hk.instruments:
             ### Centroid is initially defined by RA, Dec.
             if ifp[myinst].pt_src == True:
-                myflux  = pos[posind]
+                myflux  = pos[posind]*mysign[index]
                 x,y     = dv[myinst].mapping.xymap            # Defined in arcseconds
                 fwhm    = dv[myinst].fwhm.to("arcsec").value  # Now this matches.
                 if hk.cfp.psfwhm[index] > fwhm:
@@ -433,6 +473,7 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
     t0 = time.time();    myargs = efv.pinit; dt0 = datetime.datetime.now()
     ndim = hk.cfp.ndim      #len(myargs)
     mnlvlmaps,ptsrcmaps,maps,yint,outalphas = make_skymodel_maps(myargs,hk,dv,ifp,efv)
+    
     print myargs
     import pdb;pdb.set_trace()
     pos = [(myargs + np.random.randn(ndim) * myargs/1e3) 
@@ -484,10 +525,10 @@ def make_skymodel_maps(pos,hk,dv,ifp,efv):
         posind+=1
     
     ### Model the bulk pressure:
-    for bins,fit_cen,geo,alp,narm in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulkgeo,
-                                         hk.cfp.bulkalp,hk.cfp.bulknarm):
+    for bins,fit_cen,fit_geo,geo,alp,narm in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulk_geometry,
+                                                 hk.cfp.bulkgeo,hk.cfp.bulkalp,hk.cfp.bulknarm):
         #print 'Bulk bins: ', bins
-        maps,posind,ynt,myalphas = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,
+        maps,posind,ynt,myalphas = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geo,alp,narm,
                                                            maps,posind,fixalpha=hk.cfp.bulkfix)
         yint.append(ynt); outalphas.extend(myalphas)
         
@@ -495,51 +536,21 @@ def make_skymodel_maps(pos,hk,dv,ifp,efv):
     for bins,fit_cen,geo,alp,narm,sfin in zip(hk.cfp.shockbin,hk.cfp.shoc_centroid,hk.cfp.shockgeo,
                                               hk.cfp.shockalp,hk.cfp.shocknarm,hk.cfp.shockfin):
 
-        ##############################################################################################
-        ### Let's do some double checks. (02 April 2018)
-        #
-        #for myinst in hk.instruments:
-        #    maps[myinst]      = np.zeros((nx,ny))
-        #origposind = posind
-        #print posind
-        #maps,posind,shint,shout = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,
-        #                                                  maps,posind,fixalpha=hk.cfp.shockfix,
-        #                                                  finite=sfin,oldvs=True)
-        #minangle = geo[2]-0.1; maxangle=geo[2]+0.1
-        #mybins=np.arange(0.0,120.0,4.0)
-        #for myinst in hk.instruments:
-        #    rads, prof = ABP.get_az_profile(maps[myinst], dv[myinst].mapping.xymap, minangle, maxangle)
-        #    binres = ABP.radial_bin(rads, prof+0.0002,10,rmax=120.0,bins=mybins,minangle=minangle,maxangle=maxangle)
-        #    fig = ABP.plot_one_slice(binres,myformat='png',fig = None,target='RXJ1347_Shock',savedir=hk.hk_outs.newpath,
-        #                             prefilename='Testing_tapers_', mylabel="Old_version")
-        #
-        #for myinst in hk.instruments:
-        #    maps[myinst]      = np.zeros((nx,ny))
-        #posind = origposind
-        #print posind
-        
-        maps,posind,shint,shout = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,geo,alp,narm,
+        fit_geo=[False] # For now, I don't want to try to do this with shocks.
+        maps,posind,shint,shout = bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geo,alp,narm,
                                                           maps,posind,fixalpha=hk.cfp.shockfix,
                                                           finite=sfin,oldvs=False)
-        #for myinst in hk.instruments:
-        #    rads, prof = ABP.get_az_profile(maps[myinst], dv[myinst].mapping.xymap, minangle, maxangle)
-        #    binres = ABP.radial_bin(rads, prof,10,rmax=120.0,bins=mybins,minangle=minangle,maxangle=maxangle)
-        #    fig = ABP.plot_one_slice(binres,myformat='png',fig = fig,target='RXJ1347_Shock',savedir=hk.hk_outs.newpath,
-        #                             prefilename='Testing_tapers_', mylabel="New_version")
-        #
-        #import pdb;pdb.set_trace()
-        ##############################################################################################
-
         
     ### Model any point sources (hk.cfp.ptsrc is a 2-tuple, the pt src. centroid):
     #print 'Position index used for point source: ',posind,' with flux ',pos[posind]
-    ptsrcmaps,posind = mk_ptsrc_v2(pos,posind,hk,dv,ifp,ptsrcmaps)
+    ptsrcmaps,posind = mk_ptsrc_v2(pos,posind,efv.ptsrcsign,hk,dv,ifp,ptsrcmaps)
 
     ### Model any "blobs" (2D Gaussians):
     ### This is currently not functional because I'm not sure exactly how I want to implement
     ### this feature.
-    for myblob in hk.cfp.blob:
-        maps,posind = mk_twodgauss(pos,posind,myptsrc,hk,dv,maps)
+    for myblob,mysign in zip(hk.cfp.blob,efv.blobsign):
+        #import pdb;pdb.set_trace()
+        maps,posind = mk_twodgauss(pos,posind,mysign,hk,dv,maps)
 
     ### Add any mean levels:
     ### (To be added)
@@ -684,6 +695,8 @@ def get_best_comp_maps(efv,hk,dv,myinst,mycomponent,hdu,returnwcs=False):
     myhdu = hdu[myinst]
     hdulist = fits.HDUList(myhdu)
 
+    #import pdb;pdb.set_trace()
+    
     if returnwcs == False:
         modelsky[myinst]=get_best_inst_comp_map(efv,hk,dv,mycomponent,myinst,hdulist,returnwcs=False)
         return modelsky

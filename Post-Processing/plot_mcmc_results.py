@@ -9,6 +9,9 @@ import astropy.units as u          # Install astropy
 import collect_variables as cv
 import save_image as si
 import ellipsoidal_shells as es
+import matplotlib.ticker as ticker
+
+myfontsize=20
 
 def plot_res_no_sampler(hk,dv,efv,overlay=None):
 ##################################### I'm not using this generally!
@@ -116,10 +119,11 @@ def plot_comps_and_resids(hk,dv,efv,hdu,tstr,ifp,overlay=None):
     #import pdb;pdb.set_trace()
 
 def plot_steps(sampler,fit_params,newpath,pre_filename,efv):
-    stepmap    = plt.figure(1,figsize=(20,12)); plt.clf()
+    stepmap    = plt.figure(1,figsize=(20,len(efv.compname))); plt.clf()
     pos_comps  = set(efv.compname)
     pos_colors = ['k','g','r','c','m','y']
     assoc_colo = {}
+    
     for i,x in enumerate(pos_comps):
         assoc_colo[x] = pos_colors[i]
 
@@ -131,20 +135,33 @@ def plot_steps(sampler,fit_params,newpath,pre_filename,efv):
         ax.plot(np.array([sampler.chain[:,j,i] for j in range(fit_params.nsteps)]),color)
         isgtz = (sampler.chain[:,:,i] > 0)
         isgtz1d = isgtz.reshape(np.product(isgtz.shape))
+        ax.get_xaxis().set_visible(False) # Maybe works?
         #import pdb;pdb.set_trace()
+        if i == 0:
+            ylims = ax.get_ylim()
+            yval  = (ylims[1] - ylims[0])*0.5 + ylims[1]
+            for j,comp in enumerate(pos_comps):
+                xval = float(fit_params.nsteps*j)/(len(pos_comps)+0.5)
+                ax.text(xval, yval, comp, color=assoc_colo[comp],fontsize=20)
+            xval = float(fit_params.nsteps*len(pos_comps))/(len(pos_comps)+0.5)
+            ax.text(xval, yval, "likelihood", color="b",fontsize=20)
+
+        
         if all(isgtz1d):
             ax.set_yscale("log", nonposy='clip')
-            ax.get_yaxis().set_visible(False) # Maybe works?
+            ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y,pos: ('{{:.{:1d}f}}'.format(int(np.maximum(-np.log10(y),0)))).format(y)))
+            #ax.get_yaxis().set_visible(False) # Maybe works?
         ax.set_ylabel((r'$P_{0}$',r'$P_{1}$',r'$P_{2}$',r'$P_{3}$',r'$P_{4}$',r'$P_{5}$',r'$P_{6}$',r'$P_{7}$',
                        r'$P_{8}$',r'$P_{9}$',r'$P_{10}$',r'$P_{11}$',r'$P_{12}$',r'$P_{13}$',r'$P_{14}$',
-                       r'$P_{15}$',r'$P_{16}$')[i],)
+                       r'$P_{15}$',r'$P_{16}$',r'$P_{17}$',r'$P_{18}$',r'$P_{19}$',r'$P_{20}$',r'$P_{21}$',
+                       r'$P_{22}$',r'$P_{23}$',r'$P_{24}$')[i],fontsize=myfontsize)
     ax = stepmap.add_subplot(fit_params.ndim+1,1,fit_params.ndim+1)
     ax.plot(np.array([sampler._lnprob[:,j] for j in range(fit_params.nsteps)]),"b")
     myyr = [np.min(sampler._lnprob[:,fit_params.burn_in*2:])*1.1,np.max(sampler._lnprob[:,fit_params.burn_in*2:])*0.9]
     ax.set_ylim(myyr)
-    ax.set_ylabel(r'$ln(\mathcal{L}$)')
+    ax.set_ylabel(r'$ln(\mathcal{L}$)',fontsize=myfontsize)
   
-    plt.xlabel('Steps')
+    plt.xlabel('Steps',fontsize=myfontsize)
     filename = "step.png"
     fullpath = os.path.join(newpath, pre_filename+filename)
 #2106_MUSTANG_6_B_Real_200S_40B_ML-NO_PP-NO_POWER_20W/
@@ -223,8 +240,8 @@ def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None
     plt.axvline(rout,color=axcol, linestyle ="dashed")
     plt.yscale("log")
     plt.xscale("log")
-    plt.xlabel("Radius ("+runits+")")
-    plt.ylabel("Pressure ("+punits+")")
+    plt.xlabel("Radius ("+runits+")",fontsize=myfontsize)
+    plt.ylabel("Pressure ("+punits+")",fontsize=myfontsize)
     plt.title(cluster.name)
     plt.grid()
     filename = tstr+"pressure.png"
@@ -242,7 +259,9 @@ def plot_correlations(samples,newpath, pre_filename):
     plt.clf()
     fig = corner.corner(samples, bins = 45,quantiles=[0.16,0.50,0.84],
                         labels=["$P_{1}$","$P_{2}$","$P_{3}$","$P_{4}$","$P_{5}$","$P_{6}$","$P_{7}$","$P_{8}$",
-                                "$P_{9}$","$P_{10}$","$P_{11}$","$P_{12}$","$P_{13}$","$P_{14}$","$P_{15}$","$P_{16}$"])
+                                "$P_{9}$","$P_{10}$","$P_{11}$","$P_{12}$","$P_{13}$","$P_{14}$","$P_{15}$","$P_{16}$",
+                                r'$P_{17}$',r'$P_{18}$',r'$P_{19}$',r'$P_{20}$',r'$P_{21}$',r'$P_{22}$',r'$P_{23}$',r'$P_{24}$'],
+                        fontsize=myfontsize)
     filename = "correlations_via_corner.png"
     fullpath = os.path.join(newpath, pre_filename+filename)
     plt.savefig(fullpath)
@@ -336,7 +355,8 @@ def plot_best_sky(maxlikesky,newpath, pre_filename,dv,mycomp="bulk",count=1,w=No
             #if mapunits == 'Jy':
             #    weightmap= dv[instrument].maps.wts *1.0e6
             wt_conv = ip.conv_inst_beam(weightmap,dv[instrument].mapping.pixsize,instrument=instrument)
-            bv = rdi.get_beamvolume(instrument) / (dv[instrument].mapping.pixsize**2)
+            #bv = rdi.get_beamvolume(instrument) / (dv[instrument].mapping.pixsize**2)
+            bv = dv[instrument].bv / (dv[instrument].mapping.pixsize**2)
             #print bv
             #import pdb;pdb.set_trace()
 
@@ -367,8 +387,8 @@ def plot_sky_map(fullpath,image,title,mapaxisunits,mapunits,format='png'):
     plt.figure(2,figsize=(20,12));        plt.clf()
     plt.imshow(image) # May want to add "extent"
     plt.title(title)
-    plt.xlabel(mapaxisunits); plt.ylabel(mapaxisunits)
-    cbar = plt.colorbar();    cbar.set_label(mapunits)
+    plt.xlabel(mapaxisunits,fontsize=myfontsize); plt.ylabel(mapaxisunits,fontsize=myfontsize)
+    cbar = plt.colorbar();    cbar.set_label(mapunits,fontsize=myfontsize)
     plt.savefig(fullpath,format=format)
     plt.close()
     
@@ -403,7 +423,7 @@ def overplot_input(hk,efv,cluster):
             darr = np.array([1.0,(rmax/rmin)**ealp[idx]])*eden[idx]
             tarr = np.array([1.0,(rmax/rmin)**talp[idx]])*temp[idx]
             
-        plt.plot([rmin,rmax],darr*tarr,"g",label = "Input Pressure")
+        plt.plot([rmin,rmax],darr*tarr,"g",label = "Input Pressure",fontsize=myfontsize)
 
     return title
 

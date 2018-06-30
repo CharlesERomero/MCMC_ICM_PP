@@ -35,8 +35,8 @@ from os.path import expanduser
 myhome = expanduser("~")
 
 ########## Allow a few defaults / parameters to be set here: ##############
-instrument='MUSTANG2'; name='rxj1347_wshock'; savedir=myhome+'/Results_Python'
-tag='Apr_notaper_ptshift_noptprior_'; testmode='Full'; nthreads=1
+instrument='MUSTANG2'; name='hsc_2'; savedir=myhome+'/Results_Python'
+tag='May_'; testmode='Full'; nthreads=1
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
 ################ Get parameters for fitting procedure: ####################

@@ -38,23 +38,23 @@ class files:
         if instrument == "MUSTANG2": 
         
             self.instrument="MUSTANG2"
-            self.name='rxj1347'
+            self.name='hsc_2'
 #############################################################
             if map_file == 'noise':
-                self.indir= m2dir+"AGBT17_Products/RXJ1347/romero_2018/"
+                self.indir= m2dir+"AGBT17_Products/HSC/"
 #                self.fitsfile=self.indir+"pca7_f0.09_noise.fits"
 #                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__noise_rescaled.fits"
-                self.fitsfile=self.indir+"RXJ1347_noise.fits"
+                self.fitsfile=self.indir+"HSC_2_map.fits"
             if map_file == 'all':
-                self.indir= m2dir+"AGBT17_Products/RXJ1347/romero_2018/"
+                self.indir= m2dir+"AGBT17_Products/HSC/"
 #                self.fitsfile=self.indir+"pca7_f0.09_map.fits"
 #                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__map_rescaled.fits"
-                self.fitsfile=self.indir+"RXJ1347_map.fits"
+                self.fitsfile=self.indir+"HSC_2_map.fits"
 #############################################################
             self.wtfile=self.fitsfile # It's in the same file; just a different extension.
             self.wtext=1         # The extension of the weight (or RMS) array
             self.wtisrms=False   # The "weight" file is actual the RMS of pixels
-            self.units='Jy'  # A fundamental, critical, and wholly important variable!!
+            self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
 #            self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
         
             ###############################################################################
@@ -70,7 +70,7 @@ class files:
             self.calunc = 0.1      # 10% calibration accuracy.
             self.fitptsrcs = True
             self.fitmnlvl  = True
-            self.rmscorr   = 1.61
+            self.rmscorr   = 1.17
 
         if instrument == "NIKA2":
 
@@ -125,12 +125,14 @@ class priors:
         ### known / accurate. M_500 and Tx are useful for creating initial guesses.
         ### Tx is still important if relativistic corrections may be severe.
         
-        self.z=0.4510                      # Redshift
-        self.ra = Angle('13h47m30.5s')     # Right Ascencion, in hours
-        self.dec= Angle('-11d45m9s')       # Declination, in degrees
-        self.M_500 = 2.2e15                # Solar masses
-        self.Tx    = 10.8                  # keV
-        self.name  = 'rxj1347'
+        self.z=0.4296                      # Redshift
+        #self.ra = Angle('02h21m45.184s')     # Right Ascencion, in hours
+        #self.dec= Angle('-03d46m14.94s')       # Declination, in degrees
+        self.ra = Angle('02h21m45.635s')     # Right Ascencion, in hours
+        self.dec= Angle('-03d46m18.81s')       # Declination, in degrees
+        self.M_500 = 4.8e14                # Solar masses
+        self.Tx    = 6.8                  # keV
+        self.name  = 'hsc_2'
         
         ###  For when the time comes to use the *actual* coordinates for Abell 2146,
         ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
@@ -140,7 +142,8 @@ class private_vars:
 
     def __init__(self):
         
-        RXJ1347_ra    = Angle('13h47m30.5s'); RXJ1347_dec    = Angle('-11d45m9s')
+        #RXJ1347_ra    = Angle('02h21m45.184s'); RXJ1347_dec    = Angle('-03d46m14.94s')
+        RXJ1347_ra    = Angle('02h21m45.635s'); RXJ1347_dec    = Angle('-03d46m18.81s')
  
 class shocks:
 
@@ -152,9 +155,9 @@ class shocks:
         ### NOTE: If Taper scaling (geoparams[6]) is 0, then no tapering is applied
         geoparams = [0,0,0,1,1,1,0,0] # Spherical Geometry
         ### These parameters were used in March. I think I want to change things a bit...
-        rxjshock  = [0,0,4.06,1,1,1,2.0,3.1415]   # Angles specified in radians!!! (3.4 to 4.2 rad)
+        #rxjshock  = [0,0,4.06,1,1,1,2.0,3.1415]   # Angles specified in radians!!! (3.4 to 4.2 rad)
         ### Let's change 
-        rxjshock  = [0,0,4.06,1,1,1,0.0,0.8]   # Angles specified in radians!!! (3.4 to 4.2 rad)
+        #rxjshock  = [0,0,4.06,1,1,1,0.0,0.8]   # Angles specified in radians!!! (3.4 to 4.2 rad)
         ### 3.75 radians = angle of shock  (SW)
         ### 0.7 radians  = opening angle       ; 1.31
 
@@ -162,20 +165,21 @@ class shocks:
         mybins = np.array([60.0,120.0,180.0,240.0,300.0])*u.kpc
         
 ### If you don't want to fit for shock components:
-#        self.geoparams = []                       # Array of geometric parameters
-#        self.bins      = []                       # Bins, specified in kpc
-#        self.fstemps   = []                       # Fit for shock temperatures?
-#        self.shockalp  = []                       # set
-#        self.taper     = ['normal']               # Type of taper. 'normal' is recommended.
-#        self.narm      = [True]                   # Normalize at R_min
-### Otherwise, for RXJ1347:
-        self.geoparams = [rxjshock]               # Array of geometric parameters
-        self.bins      = [mybins]                 # Array OF arrays. Units necessary.
-        self.fstemps   = [False]                  # Fit for shock temperatures?
-        self.shockalp  = [np.zeros(len(mybins))]  # set
+        self.geoparams = []                       # Array of geometric parameters
+        self.bins      = []                       # Bins, specified in kpc
+        self.fstemps   = []                       # Fit for shock temperatures?
+        self.shockalp  = []                       # set
         self.taper     = ['normal']               # Type of taper. 'normal' is recommended.
         self.narm      = [True]                   # Normalize at R_min
-        self.shockfin  = [True]                   # Finite integration (out to last bin)
+        self.shockfin  = [True]
+### Otherwise, for RXJ1347:
+#        self.geoparams = [rxjshock]               # Array of geometric parameters
+#        self.bins      = [mybins]                 # Array OF arrays. Units necessary.
+#        self.fstemps   = [False]                  # Fit for shock temperatures?
+#        self.shockalp  = [np.zeros(len(mybins))]  # set
+#        self.taper     = ['normal']               # Type of taper. 'normal' is recommended.
+#        self.narm      = [True]                   # Normalize at R_min
+#        self.shockfin  = [True]                   # Finite integration (out to last bin)
 #############################################################################
 ### LEGACY / REFERENCE CODE. TO BE DELETED WITH ENOUGH FAMILIARITY WITH CODE
 ### Reference commands from Abell 2146:
@@ -213,12 +217,13 @@ class ptsrc:
         ### From ALMA paper:
         #self.locs  = [(Angle('13h47m30.62s'),Angle('-11d45m09.5s'))]
         ### Let me just try something...:
-        self.locs  = [(Angle('13h47m30.73s'),Angle('-11d45m12.25s'))]
+        #self.locs  = [(Angle('02h21m45.184s'),Angle('-02d46m14.94s'))]
+        self.locs = []
         
         ### Enter 0 if a point source is truly point-like.
         self.fwhm  = [9.0]
         ### From Kitayama et al. 2016: ~4.00 +/- 0.03 +/- 0.25 mJy at 90 GHz
         #self.prior    = {'MUSTANG2':[0.003*u.K]}
         #self.priorunc = {'MUSTANG2':[0.0002*u.K]}
-        self.prior    = {'MUSTANG2':[0.003*u.K]}
+        self.prior    = {'MUSTANG2':[0.000*u.K]}
         self.priorunc = {'MUSTANG2':[0.02*u.K]}

@@ -208,13 +208,15 @@ class maps:
             
             self.masked_wts[mask] = 0.0
         
-def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,beta=1.0/300.0,
+def get_sz_bp_conversions(temp,instrument,bv,units='Jy/beam',array="2",inter=False,beta=1.0/300.0,
                           betaz=1.0/300.0,rel=True,quiet=False):
 
     szcv,szcu=mad.get_sz_values()
     freq_conv = (szcv['planck'] *1.0e9)/(szcv['boltzmann']*szcv['tcmb'])
     temp_conv = 1.0/szcv['m_e_c2']
-    bv = get_beamvolume(instrument)
+    if bv == 0: bv = get_beamvolume(instrument)
+    print 'To calculate Jy/K for ',instrument,' we use a beam volume of ',bv #,' arcsec2'
+
 #    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
     band, farr = inst_bp(instrument,array)
     fstep = np.median(farr - np.roll(farr,1))
@@ -261,23 +263,34 @@ def get_sz_bp_conversions(temp,instrument,units='Jy/beam',array="2",inter=False,
     JypB = tsz.Jyperbeam_factors(bv)        # Jy per beam conversion factor, from y (bT)
     xavg = np.sum(xarr*band)/np.sum(band)   # Bandpass averaged frequency; should be a reasonable approximation.
     Kepy = tsz.TBright_factors(xavg)        # Kelvin conversion factor, from y (bT)
+
+    favg = xavg/freq_conv
     
-    tSZ_JyBeam_per_y = JypB * bT  # Just multiply by Compton y to get Delta I (tSZ)
-    kSZ_JyBeam_per_t = JypB * bK  # Just multiply by tau (of electrons) to get Delta I (kSZ)
-    tSZ_Kelvin_per_y = Kepy * bT  # Just multiply by Compton y to get Delta T (tSZ)
-    kSZ_Kelvin_per_t = Kepy * bK  # Just multiply by tau (of electrons) to get Delta T (kSZ)
+    tSZ_JyBeam_per_y  = JypB * bT  # Just multiply by Compton y to get Delta I (tSZ)
+    kSZ_JyBeam_per_t  = JypB * bK  # Just multiply by tau (of electrons) to get Delta I (kSZ)
+    tSZ_Kelvin_per_y  = Kepy * bT  # Just multiply by Compton y to get Delta T (tSZ)
+    kSZ_Kelvin_per_t  = Kepy * bK  # Just multiply by tau (of electrons) to get Delta T (kSZ)
+    Tratio            = get_tCMB_to_tRJ(favg)
+    tSZ_Tbright_per_y = tSZ_Kelvin_per_y / Tratio
+    kSZ_Tbright_per_t = kSZ_Kelvin_per_t / Tratio
 
     if quiet == False:
         print 'Assuming a temperature of ',temp,' keV, we find the following.'
-        print 'To go from Compton y to Jy/Beam, multiply by: ', tSZ_JyBeam_per_y
-        print 'To go from tau to Jy/Beam (kSZ), multiply by: ', kSZ_JyBeam_per_t
-        print 'To go from Compton y to Kelvin, multiply by: ', tSZ_Kelvin_per_y
-        print 'To go from tau to Kelvin (kSZ), multiply by: ', kSZ_Kelvin_per_t
+        print 'To go from Compton y to Jy/Beam, multiply by: ', tSZ_JyBeam_per_y.value
+        print 'To go from tau to Jy/Beam (kSZ), multiply by: ', kSZ_JyBeam_per_t.value
+        print 'To go from Compton y to T_CMB, multiply by: ', tSZ_Kelvin_per_y
+        print 'To go from tau to T_CMB (kSZ), multiply by: ', kSZ_Kelvin_per_t
+        print 'To go from Compton y to T_Bright, multiply by: ', tSZ_Tbright_per_y
+        print 'To go from tau to T_Bright (kSZ), multiply by: ', kSZ_Tbright_per_t
+        print 'The inferred Jy2K value is: ',tSZ_JyBeam_per_y.value/tSZ_Tbright_per_y
+        print 'The bandpass average frequency (in GHz) is: ',favg
     
     if units == 'Kelvin':
-        tSZ_return = tSZ_Kelvin_per_y; kSZ_return = kSZ_Kelvin_per_t
+        tSZ_return = tSZ_Tbright_per_y; kSZ_return = kSZ_Tbright_per_t
+        print 'Maps are in Kelvin; using ',tSZ_return
     else:
         tSZ_return = tSZ_JyBeam_per_y.value; kSZ_return = kSZ_JyBeam_per_t.value        
+        print 'Maps are in Jy/beam; using ',tSZ_return
         
     return tSZ_return, kSZ_return
 
@@ -313,11 +326,7 @@ def get_beamvolume(instrument):
     bv2 = 2.0*np.pi * norm2*sig2**2   # Calculate the integral
     beamvolume = bv1 + bv2  # In units of FWHM**2 (should be arcsec squared) 
 
-    print 'Using ',beamvolume,' for MUSTANG2.'
-#    if instrument == 'MUSTANG2':
-#        beamvolume = beamvolume*0.0 + 110.0 # Hopefully this keeps the units...
-#print 'Using ',beamvolume,' for MUSTANG2.'
-#        import pdb;pdb.set_trace()
+    print 'Using ',beamvolume,' for ',instrument
     
     return beamvolume
 
@@ -460,7 +469,8 @@ def get_conv_factor(instrument):
     
     ### This value assumes true black-body spectrum:
     JyperK_SZ = JyperAsK*bv*gofx/fofx
-
+    print 'Your "naive" value for Jy per Kelvin_CMB is: ',JyperK_SZ
+    
     ### Radiance per Kelvin:
     I_per_K = 2.0*freq**2 * const.k_B / (const.c**2 * u.sr)
     IpK = I_per_K.to("Hz J s / (K m2 sr)")
@@ -470,5 +480,40 @@ def get_conv_factor(instrument):
 
     ###  And this one assumes the RJ law:
     JyperK_RJ = Jy_per_K_as*bv
+    print 'Your "naive" value for Jy per Kelvin_RJ is: ',JyperK_RJ
 
     return JyperK_RJ
+
+############################################################################
+
+def get_bv_from_Jy2K(Jy2K,instrument):
+
+    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = inst_params(instrument)
+    wl = (const.c / freq).to('m').value
+    a2r = ((1.0/3600.0/180.)*np.pi)**2
+    rjk = (1e-3 *wl**2)/(2.0*1.38064)  # 1e-26 / 1e-23 = 1e-3 (1e-26 for Jy to W; 1e-23 for OoM of Boltzmann constant)
+    vol = Jy2K / (a2r/rjk)
+
+    return vol
+
+def get_tCMB_to_tRJ(myfreq):
+
+    ### Assume freq to be in GHz and a value (not a unit/quantity)
+    szcv,szcu=mad.get_sz_values()
+    freq_conv = (szcv['planck'] *1.0e9)/(szcv['boltzmann']*szcv['tcmb'])
+    x = myfreq*freq_conv
+
+    numer = (2.0*szcv['boltzmann']*szcv['tcmb']*u.keV/u.sr)*(np.exp(x)-1.0)**2 *(myfreq*u.GHz)**2
+    denom = (szcu["Icmb"] * x**4 * np.exp(x) * (const.c**2))
+    Tratio = (numer/denom).decompose()
+
+    #fts = 2.0*spconst.value("Planck constant")*u.J*u.s*(myfreq*u.GHz)**3 / (const.c**2)
+    #fts = fts.to('Jy')
+    #ICMB = fts * (1.0 / (np.exp(x)-1.0))
+    
+    #ICMB = szcu['Jycmb'] * x**3 / (np.exp(x)-1.0)
+    #myboltz = spconst.value("Boltzmann constant") * u.J
+    #IRJ  = (myboltz*szcv['tcmb'])*2.0*(myfreq*u.GHz)**2 / (const.c**2)
+    #IRJ  = IRJ.to("Jy") / u.sr
+
+    return Tratio

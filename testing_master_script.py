@@ -25,18 +25,19 @@
 ### to 1.5 hours.                                                       ###
 ###                                                                     ###
 ###########################################################################
+import numpy as np
 ############################### CER codes:  ###############################
+import save_image as si
 import plot_mcmc_results as pmr    # Each plot is its own function.     ###
 import max_like_fitting as mlf     # Some setup & running of emcee      ###
-import collect_variables as cv     # Calls many other modules           ### 
-import cProfile, sys, pstats       # I may not need pstats
-#import re
+import collect_variables as cv     # Calls many other modules           ###
+import Azimuthal_Brightness_Profiles as ABP 
 from os.path import expanduser
 myhome = expanduser("~")
 
 ########## Allow a few defaults / parameters to be set here: ##############
 instrument='MUSTANG2'; name='rxj1347_wshock'; savedir=myhome+'/Results_Python'
-tag='Apr_notaper_ptshift_noptprior_'; testmode='Full'; nthreads=1
+tag='Re_9FWHM_v1_'; testmode='Test'; nthreads=1
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
 ################ Get parameters for fitting procedure: ####################
@@ -45,30 +46,16 @@ hk,dv,ifp= cv.get_struct_of_variables([instrument],name,savedir,testmode=testmod
 ####### Create another class with variables for running the fits: #########
 efv = mlf.emcee_fitting_vars(hk,dv,ifp,tag=tag,nthreads=nthreads)
 
-####################### And now  run emcee! ###############################
-pr = cProfile.Profile()
-pr.enable()
-sampler,t_mcmc = mlf.run_emcee(hk,dv,ifp,efv)
-pr.disable()
+#######          Do simple analyses on just the maps as-is        #########
+mylist, aminarr, amaxarr = ABP.iter_two_slices(dv,hk,myformat='eps')
 
-####### Compile some results, and save (i.e. shelve) the results! #########
-hdu = mlf.post_mcmc(sampler,t_mcmc,efv,hk,dv,ifp)    
+angmap=dv['MUSTANG2'].mapping.angmap
+snrmap,hdr  = si.get_snrmap()
+mywcs = si.get_wcs(hdr)
+maskang = si.get_slice_mask(angmap,np.pi,6.0*np.pi/4.0)
+si.plot_image_wcs(snrmap, maskang, mywcs,dpi=200,myfontsize=15,zoom=True,filename='My_Map',
+                   plotmask=True,savedir=savedir,format='eps')
 
-######################### Plot the results ################################
-pmr.plot_results(hk,dv,efv,sampler,hdu,ifp)
-print 'type: mlf = reload(mlf)'
+profsl = ABP.get_slices(dv,hk)
+ABP.plot_all_slices(profsl,myformat='eps')
 import pdb; pdb.set_trace()
-#mlf.post_check(sampler,t_mcmc,efv,hk,dv,ifp)
-
-#p = pstats.Stats('pr')
-prof_out = myhome+'/PythonProfilerResults.txt'
-sys.stdout = open(prof_out, 'w')
-pr.print_stats()
-#close(prof_out)
-sys.stdout = sys.__stdout__
-
-#pr.sort_stats('time').print_stats(10)
-
-##################### Load and Plot the results ###########################
-#my_dv,my_hk,my_efv = mlf.unpickle()
-#pmr.plot_res_no_sampler(my_hk,my_dv,my_efv,overlay='input')

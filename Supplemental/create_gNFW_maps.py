@@ -26,6 +26,29 @@ def get_d_a(z):
 
 ####################################################################################
 
+def make_a10_grid():
+
+    for i in range(5):
+        mym500 = 2.0**i 
+        for j in range(10)+1:
+            z             = j*0.2
+            M500          = mym500*const.M_sun*1.0e14
+            R500, P500    = R500_P500_from_M500_z(M500, z, mycosmo)
+            yprof, inrad  = compton_y_profile_from_m500_z(M500, z, mycosmo)
+            ang_dist      = get_d_a(z)
+            theta_range   = (inrad/ang_dist).decompose()
+            theta_range   = theta_range.value
+
+            zstr          = '%1.1f' % z
+            mstr          = '%2.1f' % mym500
+            
+            create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,savedir=None,
+                            filename='A10_map_z'+zstr+'_m'+mstr+'e14.fits',
+                            instrument='MUSTANG2',T_e = 5.0,units='Kelvin',
+                            beta=0.0, betaz=0.0)
+
+            
+            
 def calculate_for_XLSSC():
 
     z=1.99; M500=0.63 * 10**14* const.M_sun      # For Stefano's cluster
@@ -160,7 +183,7 @@ def Y_sphere(myprof, radii, Rmax, d_ang = 0, z=1.99):
 
 def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,savedir=None,
                     filename='gNFW_map.fits', instrument='MUSTANG2',T_e = 5.0,units='Jy',
-                    beta=0.0, betaz=0.0):
+                    beta=0.0, betaz=0.0,prefile='ProfilePlot_'):
     """
     yprof         - A list/array of Compton y values
     theta_range   - The associated array of radii (on the sky) in radians.
@@ -192,7 +215,7 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
     beam_conv  = ip.conv_gauss_beam(mymap,mappixsize,fwhm)
     filt_img   = ip.apply_xfer(beam_conv, my_xfer,instrument)
 
-    tSZ,kSZ = rdi.get_sz_bp_conversions(T_e,instrument,units,array="2",
+    tSZ,kSZ = rdi.get_sz_bp_conversions(T_e,instrument,bv,units,array="2",
                                         inter=False,beta=beta,betaz=betaz,rel=True)
     Sky_Bright = filt_img * tSZ   # Map in measurable units (either Kelvin or Jy/beam)
     
@@ -207,12 +230,17 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
     print fullpath
     mm.write_hdu_to_fits(hdu,fullpath)
 
-    rmsmap = make_rmsMap(xymap,theta_range,target=25.0,conv=tSZ)
+    rmstarget=25.0
+    rmsmap = make_rmsMap(xymap,theta_range,rmstarget,conv=tSZ)
+    compyrms = np.abs(rmstarget/tSZ)
+    rmsstr = "{:4.2f}".format(compyrms)
     
     fig=None
-    prefilename='HSC_DDT_3e14_z1p2_A10_plots'
+    #prefilename=
+    #prefilename='HSC_DDT_3e14_z1p2_A10_plots'
     #prefilename='HSC_DDT_1e14_z1p2_A10_plots'
-    for thismap,thislab in zip([mymap, filt_img, rmsmap],['Sky Map','Filtered Map','Scalable RMS']):
+    for thismap,thislab,index in zip([mymap, filt_img, rmsmap],['Sky Map','Filtered Map','center RMS: '+rmsstr+'e-6 Compton y'],
+                                     [1,2,3]):
 
         angmin = 0.0;  angmax = 2.0*np.pi
         mythetamask = np.zeros(thismap.shape)
@@ -223,17 +251,18 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
         binres = ABP.radial_bin(rads, prof,10,rmax=120.0,bins=mybins,minangle=angmin,maxangle=angmax,
                                 profunits='Compton y')
         
-        fig    = ABP. plot_one_slice(binres,myformat='png',fig = fig,target='HSC_DDT',
-                                     savedir=savedir,prefilename=prefilename,mylabel=thislab)
-
-        if thislab == 'Scalable RMS':
+        fig    = ABP. plot_one_slice(binres,myformat='png',fig = fig,target=prefile,
+                                     savedir=savedir,prefilename=prefile,mylabel=thislab)
+        #import pdb;pdb.set_trace()
+        
+        if index == 3:
             bpixv = ((binres.npix*(mappixsize*u.arcsec)**2)/bv).decompose()
             print bpixv
             binres.profavg /= np.sqrt(bpixv.value)
-            thislab = 'SEM (same binning)'
-            import pdb;pdb.set_trace()
-            fig    = ABP. plot_one_slice(binres,myformat='png',fig = fig,target='HSC_DDT',
-                                         savedir=savedir,prefilename=prefilename,mylabel=thislab)
+            thislab = 'Standard error of the mean'
+            #import pdb;pdb.set_trace()
+            fig    = ABP.plot_one_slice(binres,myformat='png',fig = fig,target=prefile,
+                                         savedir=savedir,prefilename=prefile,mylabel=thislab)
 
             
             

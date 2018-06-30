@@ -12,10 +12,11 @@ class common_fit_params:
     def __init__(self,bins=[6],shbins=[6],path=myhome+'/Results_Python/',
                  bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
                  shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
-                 ptsrcs=[],psfwhm=[],
-                 blobs=[],fbtemps=[False],fstemps=[False],
-                 minmax=np.array([2.0,100.0])*u.arcsec,
-                 cluster=None,testmode='Test',autodetect=False):
+                 ptsrcs=[],psfwhm=[],blobs=[],fbtemps=[False],fstemps=[False],
+                 minmax=np.array([2.0,100.0])*u.arcsec,blobcens=[[0],[0]],
+                 cluster=None,testmode='Test',autodetect=False,fitbulkcen=[False],
+                 fitblobcen=[False],fitptcen=[False],fitshockcen=[False],
+                 fitbulkgeo=[False]):
 
     ##################################################################################
     #####      Let's first prepare the bins for our bulk and shock components    #####
@@ -98,13 +99,14 @@ class common_fit_params:
         # If you want to specify the bin locations, you should do so within the file
         # that spits out "priors"
         
-        self.blob     = blobs      # Do not fit for a "blob" component
+        self.blob     = blobs       # List of blob components
+        self.bras     = blobcens[0] # List of Right Ascensions
+        self.bdecs    = blobcens[1] # List of Declinations
 
 ### I think I will want to add masks for bulk and shock components. Or at least
 ### the option to have them... I'm not sure how I want to do this yet, so I guess I will
 ### hold off on this for now (08 Nov 2017).
         
-### I CURRENTLY HAVE A BUG WITH mn_lvl. (20 June 2017)
         self.pprior = False      # Use a Planck Prior on Y_int
         self.ubmap = False       # Uniform bins (pressure is flat)
         self.real_data = True    # 
@@ -114,16 +116,39 @@ class common_fit_params:
         #import pdb;pdb.set_trace()
         print totbins,len(self.ptsrc), len(self.blob)
         ### I will need to add the blob stuff outside of this routine (20 Feb 2018)
-        self.ndim    = totbins + len(self.blob) #+ len(self.ptsrc)
+        nblobbins = 0
+        for blobpars in self.blob: nblobbins = nblobbins + len(blobpars)
+        self.ndim    = totbins + nblobbins #+ len(self.ptsrc)
 
 ### Some "advanced" features, which I hope to implement at some point
-        self.bulk_centroid = [False]*len(bulkarc)    # Fit for a galaxy cluster centroid
-        self.shoc_centroid = [False]*len(myshbins)   # Fit for shock centroid(s)
-        self.psrc_centroid = [False]*len(self.ptsrc) # Fit for point source centroid(s) 
-        self.blob_centroid = [False]*len(self.blob)  # Fit for the blob centroid
-        self.testmode = testmode
+        self.bulk_centroid = fitbulkcen  * len(bulkarc)    # Fit for a galaxy cluster centroid
+        self.shoc_centroid = fitshockcen * len(myshbins)   # Fit for shock centroid(s)
+        self.psrc_centroid = fitptcen    * len(self.ptsrc) # Fit for point source centroid(s) 
+        self.blob_centroid = fitblobcen  * len(self.blob)  # Fit for the blob centroid
+        self.bulk_geometry = fitbulkgeo  * len(bulkarc)    # Fit for a galaxy cluster centroid
+
+        ncen  = 0   # Number of fitted centroids
+        ncen = ncen+2*len(bulkarc)    if fitbulkcen  == [True] else ncen+0
+        ncen = ncen+2*len(myshbins)   if fitshockcen == [True] else ncen+0
+        ncen = ncen+2*len(self.ptsrc) if fitptcen    == [True] else ncen+0
+        ### By default, I'll fit for the blob center...
+        #ncen = ncen+2*len(self.blob)  if fitblobcen  == [True] else ncen+0
+
+        self.ndim += ncen
+
+        nextra = 0
+        nextra = nextra+2*len(bulkarc)    if fitbulkgeo  == [True] else nextra+0
+        
+        self.ndim += nextra
+
+        
+        self.testmode = testmode      
 ### "Testing" values:
         ### Here is the longest I would think to do:
+        if testmode == 'XLong':
+            self.nwalkers= int(self.ndim *2)*2
+            self.nsteps  = 20000
+            self.burn_in = 3000
         if testmode == 'Long':
             self.nwalkers= int(self.ndim *1.5)*2
             self.nsteps  = 5000
@@ -170,13 +195,14 @@ class common_fit_params:
             
 class inst_fit_params:
 
-    def __init__(self,inputs,ptsrcs,instrument,maskrad=0):
+    def __init__(self,inputs,ptsrcs,blobs,instrument,maskrad=0):
 
         fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = rdi.inst_params(inputs.instrument)
         if maskrad == 0: maskrad = FoV*1.5
-        self.mn_lvl  = inputs.fitmnlvl     # Do not fit for a mean level
-        self.pt_src  = inputs.fitptsrcs
-        self.maskrad = maskrad
+        self.mn_lvl  = inputs.fitmnlvl          # Do not fit for a mean level
+        self.pt_src  = inputs.fitptsrcs         # Should be True or False...
+        self.fitblob = blobs.dofit[instrument]  # Should be True or False...
+        self.maskrad = maskrad                  #
         
         self.prior=[myprior for myprior in ptsrcs.prior[instrument]]
         self.priorunc=[mypriorunc for mypriorunc in ptsrcs.priorunc[instrument]]

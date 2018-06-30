@@ -32,7 +32,7 @@ s353 = 6.8* (353/260.0)**alpha
 def old_single_freq(myfreq,temp=10.0):
 
     temp = 10.0 * u.keV
-    myfreq = 353.0*u.K
+    myfreq = 353.0*u.K  # Really in GHz
     
     freq_conv = (planck*1.0e9)/(boltzmann*tcmb)
     temp_conv = 1.0/m_e_c2
@@ -120,3 +120,42 @@ def Jy2K(instrument):
     factor = Kpy/JypB
     print 'To go from Jy/Beam to Kelvin (CMB), multiply by: ',factor
 #    import pdb; pdb.set_trace()
+
+def Carlstrom(instrument):
+
+    bv = rdi.get_beamvolume(instrument)
+    m2bvrdcs0910 = 122.047765545 * (u.arcsec)**2
+    bv = m2bvrdcs0910
+    #JypB = tsz.Jyperbeam_factors(bv)
+    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = rdi.inst_params(instrument)
+    freq = 87.0*u.GHz
+    szcv,szcu = mad.get_sz_values()
+    x = szcv["planck"]*(freq.to("Hz")).value / (szcv["boltzmann"]*szcv["tcmb"])
+
+    Te = 6.4 # keV
+    Icmb = szcu['Jycmb']
+    Inot = (Icmb*(bv.to('sr')))
+    term1 = (x * (np.exp(x) + 1.0)/(np.exp(x) - 1.0) -4.0)
+    factors = (x**4 * np.exp(x))/(np.exp(x)-1.0)**2
+    thetae  = Te/szcv["m_e_c2"]
+
+    carlI  = term1*factors*Inot
+    carlT  = term1*szcv["tcmb"]
+    myboltz= spconst.value("Boltzmann constant") # J/K
+    TfromI = (carlI/(bv.to('sr'))) * (const.c**2 /(2.0* myboltz*u.J/u.K * freq**2))
+    TfromI = TfromI.decompose()
+
+    Jy2K  = carlI / carlT
+
+    xtilde = x * (np.exp(x) + 1.0)/(np.exp(x) - 1.0)
+    stilde = x *(2.0*np.exp(x/2.0)) / (np.exp(x) - 1.0)
+    Y0    = xtilde - 4.0
+    Y1    = (-10.0 + 47.0*xtilde/2.0 - 42.0*xtilde**2/5.0 + 0.7*xtilde**3 +
+             stilde**2 *(1.4*xtilde - 4.2))
+    term2 = (1.0 )
+
+    firstor = Inot*factors*(Y0 + thetae*Y1)
+    print carlI
+    print firstor
+
+    
