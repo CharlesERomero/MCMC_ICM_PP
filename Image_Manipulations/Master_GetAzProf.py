@@ -36,14 +36,18 @@ import mapping_modules as mm       # Creates radius + pressure arrays.
 import retrieve_data_info as rdi
 from astropy.wcs import WCS
 from astropy.coordinates import Angle
+import file_presets as fp
 
 myhome = expanduser("~")
 
 ########## Allow a few defaults / parameters to be set here: ##############
-datadir='/home/data/MUSTANG2/MINKASI/HighZ/'
-fitsfile=datadir+'2XMMJ0830+5241_precon_2_arcsec_pass_4.fits'
-ra_deg  = Angle('8h30m25.875s').to('deg')
-dec_deg = Angle('52d41m33.96s').to('deg')
+#datadir='/home/data/MUSTANG2/MINKASI/HighZ/'
+#fitsfile=datadir+'2XMMJ0830+5241_precon_2_arcsec_pass_4.fits'
+#ra_deg  = Angle('8h30m25.875s').to('deg')
+#dec_deg = Angle('52d41m33.96s').to('deg')
+
+src              = '2XMM'
+datadir,fitsfile,ra_deg,dec_deg = fp.get_info(src)
 
 data_map, header = fits.getdata(fitsfile, header=True)
 w                = WCS(fitsfile)
@@ -54,7 +58,7 @@ rads, prof       = ABP.get_az_profile(data_map, xymap, 0.0, 2.0*np.pi-1.0e5, geo
 slices           = []
 mybins           = np.arange(0.0,180.0,5.0)
 binres           = ABP.radial_bin(rads, prof,10,rmax=60.0,bins=mybins,minangle=0.0,maxangle=2.0*np.pi-1.0e5)
-ABP.plot_one_slice(binres,savedir=datadir,target='2XMM')
+ABP.plot_one_slice(binres,myformat='eps',savedir=datadir,target=src)
 slices.append(binres)
 
 

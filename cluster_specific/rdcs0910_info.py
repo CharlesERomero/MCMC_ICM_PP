@@ -44,11 +44,13 @@ class files:
                 if map_file == 'noise':
                     self.indir= m2dir+"AGBT17_Products/RDCS0910/"
                     #self.fitsfile=self.indir+"Kelvin_RDCS0910_2aspix_cmcorr_v3_noise_iter1.fits"
-                    self.fitsfile=self.indir+"Kelvin_RDCS0910_2aspix_pca3_0f05_bugfixed_noise_iter1.fits"
+                    #self.fitsfile=self.indir+"Kelvin_RDCS0910_2aspix_pca2_0f05_bugfixed_noise_iter1.fits"
+                    self.fitsfile=self.indir+"Kelvin_RDCS0910_2asp_cmcorr32_0f04_40Hz_fc_0rr_test__noise_iter3.fits"
                 if map_file == 'all':
                     self.indir= m2dir+"AGBT17_Products/RDCS0910/"
                     #self.fitsfile=self.indir+"Kelvin_RDCS0910_2aspix_cmcorr_v3_map_iter1.fits"
-                    self.fitsfile=self.indir+"Kelvin_RDCS0910_2aspix_pca3_0f05_bugfixed_map_iter1.fits"
+                    #self.fitsfile=self.indir+"Kelvin_RDCS0910_2aspix_pca2_0f05_bugfixed_map_iter1.fits"
+                    self.fitsfile=self.indir+"Kelvin_RDCS0910_2asp_cmcorr32_0f04_40Hz_fc_0rr_test__map_iter3.fits"
                 self.wtfile=self.fitsfile # It's in the same file; just a different extension.
                 self.wtext=1         # The extension of the weight (or RMS) array
                 self.wtisrms=False   # The "weight" file is actual the RMS of pixels
@@ -229,7 +231,18 @@ class bulk:
 
         self.geoparams=[geoparams]
         ### You can specify the number of bins (as a LIST, as below):
-        self.bins = [6]      
+        #mymodel = 'GNFW'  # Non-parametric
+        mymodel = 'NP'
+        self.model = mymodel
+        
+        if mymodel == 'NP':
+            self.bins = [4]
+        elif mymodel == 'GNFW':
+            self.bins = [4]
+        elif mymodel == 'BETA':
+            self.bins = [2]
+
+            
         ### Or, you can specify an array, which *MUST* then have units
         ### attached to it.
         #self.minarc = 2.0*u.arcsec
@@ -239,7 +252,7 @@ class bulk:
         self.narm  = [True]   # Normalize at R_min
         self.taper = ['normal']   # A bit silly to have, but it's better...
         self.fit_cen = [False]
-        self.fit_geo = [True]
+        self.fit_geo = [False]
 
 class blob:
 

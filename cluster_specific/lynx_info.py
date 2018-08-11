@@ -7,7 +7,7 @@ from os.path import expanduser
 myhome = expanduser("~")
 
 ###############################################################################
-### This is only for MODELLING OF ABELL 2146!!! 
+### This is only for MODELLING OF RXJ1053!!! 
 ###############################################################################
 
 ### CLASSES WHICH ARE USED BY OTHER ROUTINES:
@@ -30,7 +30,7 @@ nkdir  = "/home/data/NIKA/"
 
 class files:
 
-    def __init__(self,instrument="MUSTANG2",map_file='all'):
+    def __init__(self,instrument="MUSTANG2",map_file='all',reduction='CMCORR'):
 
         ###############################################################################
         ### Some fundamental files (for data), as well as their formatting.
@@ -38,25 +38,49 @@ class files:
         if instrument == "MUSTANG2": 
         
             self.instrument="MUSTANG2"
-            self.name='hsc_2'
+            self.name='lynx'
 #############################################################
-            if map_file == 'noise':
-                self.indir= m2dir+"AGBT17_Products/HSC/"
-#                self.fitsfile=self.indir+"pca7_f0.09_noise.fits"
-#                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__noise_rescaled.fits"
-                self.fitsfile=self.indir+"HSC_2_map.fits"
-            if map_file == 'all':
-                self.indir= m2dir+"AGBT17_Products/HSC/"
-#                self.fitsfile=self.indir+"pca7_f0.09_map.fits"
-#                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__map_rescaled.fits"
-                self.fitsfile=self.indir+"HSC_2_map.fits"
-#############################################################
-            self.wtfile=self.fitsfile # It's in the same file; just a different extension.
-            self.wtext=1         # The extension of the weight (or RMS) array
-            self.wtisrms=False   # The "weight" file is actual the RMS of pixels
-            self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
-#            self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
-        
+            if reduction == 'CMCORR':
+                if map_file == 'noise':
+                    self.indir= m2dir+"AGBT17_Products/Lynx/"
+                    #self.fitsfile=self.indir+"Kelvin_rxj1053p7+5735_2aspix__map_iter1.fits"
+                    self.fitsfile=self.indir+""
+                if map_file == 'all':
+                    self.indir= m2dir+"AGBT17_Products/RXJ1053/"
+                    #self.fitsfile=self.indir+"Kelvin_rxj1053p7+5735_2aspix__map_iter1.fits"
+                    self.fitsfile=self.indir+""
+                #############################################################
+                self.wtfile=self.fitsfile # It's in the same file; just a different extension.
+                self.wtext=1         # The extension of the weight (or RMS) array
+                self.wtisrms=False   # The "weight" file is actual the RMS of pixels
+                self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
+
+            if reduction == 'PCA':
+                if map_file == 'noise':
+                    self.indir= m2dir+"AGBT17_Products/Lynx/"
+                    self.fitsfile=self.indir+"Kelvin_lynx_2aspix_pca3_0f05_bugfixed_noise_iter1.fits"
+                if map_file == 'all':
+                    self.indir= m2dir+"AGBT17_Products/Lynx/"
+                    self.fitsfile=self.indir+"Kelvin_lynx_2aspix_pca3_0f05_bugfixed_map_iter1.fits"
+                #############################################################
+                self.wtfile=self.fitsfile # It's in the same file; just a different extension.
+                self.wtext=1         # The extension of the weight (or RMS) array
+                self.wtisrms=False   # The "weight" file is actual the RMS of pixels
+                self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
+
+            if reduction == 'MINKASI':
+                if map_file == 'noise':
+                    self.indir= m2dir+"AGBT17_Products/RXJ1053/"
+                    self.fitsfile=self.indir+"Kelvin_rxj1053p7+5735_2aspix__map_iter1.fits"
+                if map_file == 'all':
+                    self.indir= m2dir+"AGBT17_Products/RXJ1053/"
+                    self.fitsfile=self.indir+"Kelvin_rxj1053p7+5735_2aspix__map_iter1.fits"
+                #############################################################
+                self.wtfile=self.fitsfile # It's in the same file; just a different extension.
+                self.wtext=1         # The extension of the weight (or RMS) array
+                self.wtisrms=False   # The "weight" file is actual the RMS of pixels
+                self.units='Kelvin'  # A fundamental, critical, and wholly important variable!!
+            
             ###############################################################################
             ### Here's what I need to know about the transfer function format:
             ### If there are issues, please see code XYZ
@@ -68,14 +92,14 @@ class files:
             self.tabdims = '1D'
             self.tabextend = True    # Do we need to extent to higher k numbers?
             self.calunc = 0.1      # 10% calibration accuracy.
-            self.fitptsrcs = True
+            self.fitptsrcs = False
             self.fitmnlvl  = True
             self.rmscorr   = 1.17
 
         if instrument == "NIKA2":
 
             self.calunc = 0.07      # 10% calibration accuracy.
-            self.fitptsrcs = True
+            self.fitptsrcs = False
             self.fitmnlvl  = True
             print 'This section not developed yet!'
             self.units='Jy/beam'
@@ -125,25 +149,46 @@ class priors:
         ### known / accurate. M_500 and Tx are useful for creating initial guesses.
         ### Tx is still important if relativistic corrections may be severe.
         
-        self.z=0.4296                      # Redshift
-        #self.ra = Angle('02h21m45.184s')     # Right Ascencion, in hours
-        #self.dec= Angle('-03d46m14.94s')       # Declination, in degrees
-        self.ra = Angle('02h21m45.635s')     # Right Ascencion, in hours
-        self.dec= Angle('-03d46m18.81s')       # Declination, in degrees
+        ################################################################
+        #self.z=1.26                        # Redshift
+        #self.ra = Angle('08h48m58.556s')   # Right Ascencion, in hours
+        #self.dec= Angle('+44d51m56.26s')   # Declination, in degrees
+        #self.M_500 = 2.0e14                # Solar masses
+        #self.Tx    = 6.8                   # keV
+        #self.name  = 'lynx-E'              #
+        ################################################################
+        #self.z=1.26                        # Redshift
+        #self.ra = Angle('08h48m31.460s')   # Right Ascencion, in hours
+        #self.dec= Angle('+44d53m20.24s')   # Declination, in degrees
+        #self.M_500 = 2.0e14                # Solar masses
+        #self.Tx    = 6.8                   # keV
+        #self.name  = 'lynx-W'              #
+        ################################################################
+        self.z=0.57                        # Redshift
+        self.ra = Angle('08h48m47.458s')   # Right Ascencion, in hours
+        self.dec= Angle('+44d56m18.30s')   # Declination, in degrees
         self.M_500 = 4.8e14                # Solar masses
-        self.Tx    = 6.8                  # keV
-        self.name  = 'hsc_2'
+        self.Tx    = 6.8                   # keV
+        self.name  = 'lynx-N'              #
+        ################################################################
+        #self.z  = [1.26, 1.26, 0.57]        # Redshift
+        #self.ra = [Angle('08h48m58.556s'),Angle('08h48m31.460s'),Angle('08h48m47.458s')]
+                                            # Right Ascencion, in hours
+        #self.dec= [Angle('+44d51m56.26s'),Angle('+44d53m20.24s'),Angle('+44d56m18.30s')]
+        # Declination, in degrees
+        #self.M_500 = [2.0e14,2.0e14,4.8e14]                 # Solar masses
+        #self.Tx    = [6.8 ,6.8,6.8]                   # keV
+        #self.name  = ['lynx-E','lynx-W','lynx-N']               #
         
         ###  For when the time comes to use the *actual* coordinates for Abell 2146,
         ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
         ###  for the radius of curvature of the shocks.
 
-class private_vars:
-
-    def __init__(self):
-        
-        #RXJ1347_ra    = Angle('02h21m45.184s'); RXJ1347_dec    = Angle('-03d46m14.94s')
-        RXJ1347_ra    = Angle('02h21m45.635s'); RXJ1347_dec    = Angle('-03d46m18.81s')
+#class private_vars:
+#
+#    def __init__(self):
+#        
+#        RXJ1347_ra    = Angle('10h53m42.245s'); RXJ1347_dec    = Angle('+57d35m24.80s') 
  
 class shocks:
 
@@ -198,7 +243,18 @@ class bulk:
 
         self.geoparams=[geoparams]
         ### You can specify the number of bins (as a LIST, as below):
-        self.bins = [6]      
+        #mymodel = 'GNFW'  # Non-parametric
+        mymodel = 'NP'
+        self.model = mymodel
+        
+        if mymodel == 'NP':
+            self.bins = [4]
+        elif mymodel == 'GNFW':
+            self.bins = [4]
+        elif mymodel == 'BETA':
+            self.bins = [2]
+
+            
         ### Or, you can specify an array, which *MUST* then have units
         ### attached to it.
         #self.minarc = 2.0*u.arcsec
@@ -207,6 +263,21 @@ class bulk:
         self.bulkalp  = np.zeros(self.bins) # set to zeros -> these will be "fit for".
         self.narm  = [True]   # Normalize at R_min
         self.taper = ['normal']   # A bit silly to have, but it's better...
+        self.fit_cen = [False]
+        self.fit_geo = [False]
+
+class blob:
+
+    def __init__(self):
+
+        ### RXJ1053 coordinates
+        self.ra = [Angle('09h10m45.502s')]     # Right Ascencion, in hours
+        self.dec= [Angle('+54d22m04.04s')]       # Declination, in degrees
+        #blobparams = [0.5,0.5,2.0,0.5,0.2,-1.0e-3]
+        ### Try without the blob...
+        blobparams = []
+        self.blobpars = [blobparams]
+        self.dofit    = {'MUSTANG2':False}
 
 class ptsrc:
 
@@ -214,10 +285,6 @@ class ptsrc:
 
         ### What I found with mpfitfun or whatever:
         #self.locs  = [(Angle('13h47m30.6s'),Angle('-11d45m10.24s'))]
-        ### From ALMA paper:
-        #self.locs  = [(Angle('13h47m30.62s'),Angle('-11d45m09.5s'))]
-        ### Let me just try something...:
-        #self.locs  = [(Angle('02h21m45.184s'),Angle('-02d46m14.94s'))]
         self.locs = []
         
         ### Enter 0 if a point source is truly point-like.

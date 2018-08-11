@@ -43,10 +43,12 @@ class files:
             if reduction == 'CMCORR':
                 if map_file == 'noise':
                     self.indir= m2dir+"AGBT17_Products/2XMM/"
-                    self.fitsfile=self.indir+"Kelvin_2XMMJ0830+5241_2aspix__map_iter1.fits"
+                    #self.fitsfile=self.indir+"Kelvin_2XMMJ0830+5241_2aspix__map_iter1.fits"
+                    self.fitsfile=self.indir+'Kelvin_2XMMJ0830+5241_2aspix_pca3_0f05_bugfixed_noise_iter1.fits'
                 if map_file == 'all':
                     self.indir= m2dir+"AGBT17_Products/2XMM/"
-                    self.fitsfile=self.indir+"Kelvin_2XMMJ0830+5241_2aspix__map_iter1.fits"
+                    #self.fitsfile=self.indir+"Kelvin_2XMMJ0830+5241_2aspix__map_iter1.fits"
+                    self.fitsfile=self.indir+'Kelvin_2XMMJ0830+5241_2aspix_pca3_0f05_bugfixed_map_iter1.fits'
                 #############################################################
                 self.wtfile=self.fitsfile # It's in the same file; just a different extension.
                 self.wtext=1         # The extension of the weight (or RMS) array
@@ -61,7 +63,8 @@ class files:
                 if map_file == 'all':
                     self.indir= m2dir+"AGBT17_Products/2XMM/"
                     #self.fitsfile=self.indir+"Kelvin_2XMMJ0830+5241_2aspix__map_iter1.fits"
-                    self.fitsfile=self.indir+"2XMM_PCA3_fixed_map.fits"
+                    #self.fitsfile=self.indir+"2XMM_PCA3_fixed_map.fits"
+                    self.fitsfile=self.indir+'Kelvin_2XMMJ0830+5241_2aspix_pca3_0f05_bugfixed_map_iter1.fits'
                 #############################################################
                 self.wtfile=self.fitsfile # It's in the same file; just a different extension.
                 self.wtext=1         # The extension of the weight (or RMS) array
@@ -94,7 +97,7 @@ class files:
             self.tabdims = '1D'
             self.tabextend = True    # Do we need to extent to higher k numbers?
             self.calunc = 0.1      # 10% calibration accuracy.
-            self.fitptsrcs = True
+            self.fitptsrcs = False
             self.fitmnlvl  = True
             self.rmscorr   = 1.17
 
@@ -236,14 +239,20 @@ class bulk:
         self.narm  = [True]   # Normalize at R_min
         self.taper = ['normal']   # A bit silly to have, but it's better...
         self.fit_cen = [True]
+        self.fit_geo = [False]
 
 class blob:
 
     def __init__(self):
 
-        blobparams = [0,0,5.0,5.0,1.0,1.0]
-        self.blobpars = blobparams
-        self.dofit    = False
+        #self.ra = [Angle('09h10m45.663s')]     # Right Ascencion, in hours
+        #self.dec= [Angle('+54d22m04.28s')]       # Declination, in degrees
+        self.ra = [Angle('09h10m45.502s')]     # Right Ascencion, in hours
+        self.dec= [Angle('+54d22m04.04s')]       # Declination, in degrees
+        #blobparams = [0.5,0.5,2.0,0.5,0.2,-1.0e-3]
+        blobparams = []
+        self.blobpars = [blobparams]
+        self.dofit    = {'MUSTANG2':False}
 
 class ptsrc:
 

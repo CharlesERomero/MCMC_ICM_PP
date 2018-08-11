@@ -11,6 +11,7 @@ from os.path import expanduser          # A way to determine what the home direc
 import multiprocessing                  # A way to determine how many cores the computer has
 import datetime                         # A more thorough module than time.
 import Azimuthal_Brightness_Profiles as ABP # Modules for calculating what you think...
+import numerical_integration as ni      # For the gNFW profile
 rwrf=reload(rwrf)                       # Reload - primarily of use during development of code.
 myhome = expanduser("~")                # What is the user's home directory?
 ncpus  = multiprocessing.cpu_count()    # One can decide how aggressively to parallel process.
@@ -57,6 +58,8 @@ class emcee_fitting_vars:
         ptsrcsign = []
         ### Integral(P*dl) to Compton y (for dl given in radians):
         Pdl2y = (hk.av.szcu['thom_cross']*hk.cluster.d_a/hk.av.szcu['m_e_c2']).to("cm**3 keV**-1")
+#        Pdl2y = [(hk.av.szcu['thom_cross']*ang_diam/hk.av.szcu['m_e_c2']).to("cm**3 keV**-1") for
+#                 ang_diam in hk.cluster.d_a]
         R500 = (hk.cluster.R_500/hk.cluster.d_a).decompose()
         
         nshockp = 0; nmnlvl = 0; nbulkp = 0; nblob = 0; ncent=0; nptsrc=0; ngeo=0
@@ -102,16 +105,32 @@ class emcee_fitting_vars:
         ### on the supposed physical origin.
         
         for bulkbins,fit_cen,fit_geo in zip(hk.cfp.bulkarc,hk.cfp.bulk_centroid,hk.cfp.bulk_geometry):
-            a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,bulkbins)
-            uless_p = (a10pres*Pdl2y).decompose().value
+            if hk.cfp.model == 'NP':
+                a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,bulkbins)
+                uless_p = (a10pres*Pdl2y).decompose().value
+                sbepos.extend(np.ones((len(uless_p)),dtype=bool))
+
+            if hk.cfp.model == 'GNFW':
+                #uless_p = np.array([1.177,8.403,5.4905,0.3081])  # C500, P0,beta, gamma
+                uless_p  = np.array([0.05,3.303,3.85,0.003])  # C500, P0,beta, gamma
+                myextarr = np.ones((len(uless_p)),dtype=bool)
+                myextarr[-1] = 0
+                sbepos.extend(myextarr)
+
+            if hk.cfp.model == 'BETA':
+                uless_p = np.array([1.0,1.0])
+                sbepos.extend(np.ones((len(uless_p)),dtype=bool))
+            ###################################################################################
+            
             myval.extend(uless_p)
-            myalp.extend(uless_p*0.0) # What if I want to use strict alphas??
+            myalp.extend(uless_p*0.0) # What if I want to use strict alphas??    
             ### I need to play with centroids (updated how I do the following):
-            sbepos.extend(np.ones((len(uless_p)),dtype=bool))
             priors.extend(uless_p)
             priunc.extend(uless_p*0.0 -1.0)
             compname.extend(['bulk' for x in uless_p])
             nbulkp+=len(uless_p)
+            ####################################################################################
+                
             if fit_cen == True:
                 myval.extend([1.0,1.0]) # In particular, how much should I allow this to vary?
                 #myalp.extend([0.0,0.0]) # In particular, how much should I allow this to vary?
@@ -123,12 +142,12 @@ class emcee_fitting_vars:
                 ncent+=2
 
             if fit_geo == True:
-                myval.extend([1.0,1.0]) # In particular, how much should I allow this to vary?
+                myval.extend([1.0,0.1]) # In particular, how much should I allow this to vary?
                 #myalp.extend([0.0,0.0]) # In particular, how much should I allow this to vary?
                 # What units am I using for this?? (arcseconds? Pixel size? radians?)
                 sbepos.extend([True,True])
                 priors.extend([0.0,0.0])
-                priunc.extend([-1.0,-1.0])
+                priunc.extend([-1.0,0.2])
                 compname.extend(['bulk','bulk']) # Important to keep this in the same compname!
                 ngeo+=2
                 
@@ -243,6 +262,7 @@ class emcee_fitting_vars:
         self.punits    = "keV cm**-3"
         self.runits    = "arcsec"
         self.tag       = tag
+        self.r500      = R500
         ######################################################################################
         print '#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-'
         print 'Found the following number of parameters to be fit for each type of component:'
@@ -273,9 +293,12 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geom,alphas,n_at_
         posind = posind+2
 
     if fit_geo == True:
-        geom[2:4] = pos[posind:posind+2]
-        pos[posind] = pos[posind] % (2.0*np.pi) #if tdtheta > 2.0*np.pi
-        posind = posind+2
+        #geom[2:4] = pos[posind:posind+2]
+        geom[2]     = pos[posind]           # Rotation angle
+        geom[3]     = pos[posind+1]+1.0     # Major axis (should be > 1.0, if minor is defined as 1).
+        #pos[posind] = pos[posind] % (2.0*np.pi) #if tdtheta > 2.0*np.pi
+        pos[posind] = pos[posind] % (np.pi) #if tdtheta > np.pi b/c symmetry reduces it to just pi. (July 2018)
+        posind      = posind+2
 
     density_proxy, etemperature, geoparams = es.prep_SZ_binsky(ulesspres,hk.hk_ins.Tx,geoparams=geom)
     ### Can modify later to allow for X-ray images
@@ -285,9 +308,23 @@ def bulk_or_shock_component(pos,bins,hk,dv,efv,fit_cen,fit_geo,geom,alphas,n_at_
     
     if fullSZcorr == False:
         #import pdb;pdb.set_trace()
-        Int_Pres,outalphas,integrals = es.integrate_profiles(density_proxy, etemperature, geom,bins,
-                 efv.thetas,hk,dv,myalphas,beta=0.0,betaz=None,finint=finite,narm=False,fixalpha=fixalpha,
-                 strad=False,array="2",SZtot=False,columnDen=False,Comptony=True)
+        if hk.cfp.model == 'NP':
+            Int_Pres,outalphas,integrals = es.integrate_profiles(density_proxy, etemperature, geom,bins,
+                                           efv.thetas,hk,dv,myalphas,beta=0.0,betaz=None,finint=finite,
+                                           narm=False,fixalpha=fixalpha,strad=False,array="2",SZtot=False,
+                                           columnDen=False,Comptony=True)
+        if hk.cfp.model == 'GNFW':
+            radii    = (efv.thetas * hk.cluster.d_a).to('kpc')     # This will be in kpc
+            #import pdb;pdb.set_trace()
+            pprof    = cpp.gnfw(hk.av.mycosmo['h_70'], radii, hk.cluster.P_500, hk.cluster.R_500,
+                                c500=ulesspres[0], p=ulesspres[1], a=1.0510, b=ulesspres[2], c=ulesspres[3])
+            unitless_profile = (pprof * hk.av.szcu['thom_cross'] * u.kpc / hk.av.szcu['m_e_c2']).decompose()
+            #inrad = radii.to("kpc"); zvals = radProjected.to("kpc")
+
+            Int_Pres = ni.int_profile(radii.value, unitless_profile,radii.value)
+            outalphas = unitless_profile*0.0+2.0
+            integrals = Int_Pres
+            
         yint=es.ycylfromprof(Int_Pres,efv.thetas,efv.thetamax) #
 
     ### I think I can just do "for myinst in hk.instruments:"
@@ -443,7 +480,12 @@ def run_emcee(hk,dv,ifp,efv,init_guess=None):
         #        plike += -0.5* (np.sum(((ptsrc_amp - pspr)**2)/(psprunc**2) ))
 
         prespos = pos[efv.sbepos]
-        if all([param > 0.0 for param in prespos]) and (outalphas[-1] > 1.0):
+        if len(outalphas) == 0:
+            slopeok = True
+        else:
+            slopeok = True if outalphas[-1] > 1.0 else False
+            
+        if all([param > 0.0 for param in prespos]) and (slopeok == True):
             #print 'Everything OK'
             return plike+addlike
         #print 'In LnPrior, LogLike set to infinity ', outalphas[-1]

@@ -43,14 +43,12 @@ class files:
             if reduction == 'PCA':
                 if map_file == 'noise':
                     self.indir= m2dir+"AGBT17_Products/IDCS1426+35/"
-                    #                self.fitsfile=self.indir+"pca7_f0.09_noise.fits"
-                    #                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__noise_rescaled.fits"
-                    self.fitsfile=self.indir+"Kelvin_idcs1426+35_2aspix_pca3_0f05_bugfixed_noise_iter1.fits"
+                    #self.fitsfile=self.indir+"Kelvin_idcs1426+35_2aspix_pca3_0f05_bugfixed_noise_iter1.fits"
+                    self.fitsfile=self.indir+"Kelvin_idcs1426+35_2aspix_pca4_0f045_fullcov_noise_iter1.fits"
                 if map_file == 'all':
                     self.indir= m2dir+"AGBT17_Products/IDCS1426+35/"
-                    #                self.fitsfile=self.indir+"pca7_f0.09_map.fits"
-                    #                self.fitsfile=self.indir+"grid_pca7_f_Low0.080__map_rescaled.fits"
-                    self.fitsfile=self.indir+"Kelvin_idcs1426+35_2aspix_pca3_0f05_bugfixed_map_iter1.fits"
+                    #self.fitsfile=self.indir+"Kelvin_idcs1426+35_2aspix_pca3_0f05_bugfixed_map_iter1.fits"
+                    self.fitsfile=self.indir+"Kelvin_idcs1426+35_2aspix_pca4_0f045_fullcov_map_iter1.fits"
                 #############################################################
                 self.wtfile=self.fitsfile # It's in the same file; just a different extension.
                 self.wtext=1         # The extension of the weight (or RMS) array
@@ -73,7 +71,7 @@ class files:
             self.calunc = 0.1      # 10% calibration accuracy.
             self.fitptsrcs = True
             self.fitmnlvl  = True
-            self.rmscorr   = 1.17
+            self.rmscorr   = 1.00
 
         if instrument == "NIKA2":
 
@@ -131,21 +129,22 @@ class priors:
         self.z=1.75                        # Redshift
         #self.ra = Angle('02h21m45.184s')  # Right Ascencion, in hours
         #self.dec= Angle('-03d46m14.94s')  # Declination, in degrees
-        self.ra = Angle('14h26m33.089s')   # Right Ascencion, in hours
-        self.dec= Angle('+35d08m34.01s')   # Declination, in degrees
-        self.M_500 = 5.0e14                # Solar masses
-        self.Tx    = 6.8                   # keV
+        self.ra = Angle('14h26m33.0s')   # Right Ascencion, in hours
+        self.dec= Angle('+35d08m02.6s')   # Declination, in degrees
+        self.M_500 = 2.6e14                # Solar masses
+        self.Tx    = 5.0                   # keV
         self.name  = 'idcs'
         
         ###  For when the time comes to use the *actual* coordinates for Abell 2146,
         ###  Here they are. Even now, it's useful to calculate the offsets of the centroids
         ###  for the radius of curvature of the shocks.
 
-class private_vars:
-
-    def __init__(self):
-        
-        RXJ1347_ra    = Angle('14h26m33.089s'); RXJ1347_dec    = Angle('+35d08m34.01s') 
+#class private_vars:
+#
+#    def __init__(self):
+#        
+#        RXJ1347_ra    = Angle('14h26m33.089s'); RXJ1347_dec    = Angle('+35d08m34.01s') 
+#        RXJ1347_ra    = Angle('14h26m33.0s'); RXJ1347_dec    = Angle('+35d08m02.6s')
  
 class shocks:
 
@@ -200,7 +199,8 @@ class bulk:
 
         self.geoparams=[geoparams]
         ### You can specify the number of bins (as a LIST, as below):
-        self.bins = [6]      
+        self.bins = [4]      
+        #self.bins = []   # No bulk component!      
         ### Or, you can specify an array, which *MUST* then have units
         ### attached to it.
         #self.minarc = 2.0*u.arcsec
@@ -209,8 +209,8 @@ class bulk:
         self.bulkalp  = np.zeros(self.bins) # set to zeros -> these will be "fit for".
         self.narm  = [True]   # Normalize at R_min
         self.taper = ['normal']   # A bit silly to have, but it's better...
-        self.fit_cen = [False]
-        self.fit_geo = [True]
+        self.fit_cen = [True]
+        self.fit_geo = [False]
 
 class blob:
 
@@ -243,7 +243,11 @@ class ptsrc:
 
         self.locs = [neglocs,poslocs]
         self.fwhm = [negfwhm,posfwhm]
-        ### Enter 0 if a point source is truly point-like.
         self.prior    = {'MUSTANG2':[m2negpr,m2pospr]}
         self.priorunc = {'MUSTANG2':[m2negunc,m2posunc]}
-        #self.priorunc = {'MUSTANG2':[0.0004*u.K]}
+
+        #self.locs = [poslocs]
+        #self.fwhm = [posfwhm]
+        #self.prior    = {'MUSTANG2':[m2pospr]}
+        #self.priorunc = {'MUSTANG2':[m2posunc]}
+    

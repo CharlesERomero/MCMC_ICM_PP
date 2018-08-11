@@ -4,7 +4,8 @@ import numpy as np
 import my_astro_defaults as mad
 
 
-def calculate_for_z_M(z=1.2,mym500=3.0,myunits='Jy'):
+def calculate_for_z_M(z=1.2,mym500=3.0,myunits='Jy',mysavedir=None,fig=None,
+                      mytarget='cluster'):
 
     ### Defaults are for Stefano's cluster
     cosmo,mycosmo = mad.get_cosmology("Concordance")
@@ -15,7 +16,7 @@ def calculate_for_z_M(z=1.2,mym500=3.0,myunits='Jy'):
     Rmax          = R500
     #Ycyl    = cgm.Y_cyl(yprof, inrad, Rmax,z=z)
     #Ysphere = cgm.Y_sphere(myprof, radii, Rmax,z=z)
-    d_a     = cgm.get_d_a(z)
+    d_a           = cgm.get_d_a(z)
     
     theta_range = ((inrad / d_a).decompose()).value
     msolare14 = (M500 / (10**14* const.M_sun)).value
@@ -25,9 +26,10 @@ def calculate_for_z_M(z=1.2,mym500=3.0,myunits='Jy'):
                  '_M{:.2f}'.format(msolare14) + 'E14'
     
     cgm.create_gNFW_map(yprof, theta_range, xsize=512, ysize=512,
-                    mappixsize=2.0,savedir=None,
+                    mappixsize=2.0,savedir=mysavedir,
                         filename=myfilename,instrument='MUSTANG2',
-                        prefile=prefile,units=myunits)
+                        prefile=prefile,units=myunits,fig=fig,
+                        obstarget=mytarget)
 
     
 def make_grid():
@@ -39,5 +41,5 @@ def make_grid():
             calculate_for_z_M(z,mym500)
 
 
-make_grid()
+#make_grid()
 #calculate_for_z_M()

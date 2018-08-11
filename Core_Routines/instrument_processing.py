@@ -52,7 +52,7 @@ def conv_gauss_beam(map,pixs,fwhm):
 
     return conv
 
-def apply_xfer(mymap, tab,instrument="MUSTANG"):
+def apply_xfer(mymap, tab,instrument="MUSTANG",pixsize=1.0):
     """
     Applies a transfer function based on the instrument for which you want to
     simulate an observation for. This is namely dependent on the format of the
@@ -77,13 +77,14 @@ def apply_xfer(mymap, tab,instrument="MUSTANG"):
     """
 
     if instrument == "MUSTANG" or instrument == "MUSTANG2" or instrument == "NIKA2":
-        mapfilt = imf.fourier_filtering_2d(mymap,'tab',(tab[0,0:],tab[1,0:]))
+        myk        = tab[0,0:]*pixsize
+        mapfilt    = imf.fourier_filtering_2d(mymap,'tab',(myk,tab[1,0:]))
     if instrument == "BOLOCAM":
-        centre = mymap.shape[0]/2
-        mymap = mymap[centre-21:centre+21,centre-21:centre+21]
+        centre     = mymap.shape[0]/2
+        mymap      = mymap[centre-21:centre+21,centre-21:centre+21]
         mapfilt_ft = tab*np.fft.fft2(mymap)
-        mapfilt = np.real(np.fft.ifft2(mapfilt_ft))
+        mapfilt    = np.real(np.fft.ifft2(mapfilt_ft))
     if instrument == "NIKA":
-        mapfilt = imf.fourier_filtering_2d(mymap,'tab',(tab[0][0],tab[0][1]))
+        mapfilt    = imf.fourier_filtering_2d(mymap,'tab',(tab[0][0],tab[0][1]))
     
     return mapfilt

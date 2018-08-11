@@ -171,12 +171,16 @@ def table_filter_2d(k,par):
 
     return filter
 
-def fourier_filtering_1d(arr,filt_type,par):
+def fourier_filtering_1d(arr,filt_type,par,xarr=[]):
     farr = np.fft.fft(arr)
-#    nx,ny = arr.shape
-    nx = len(arr)         # it's strictly one dimensional!
-    k  =  np.fft.fftfreq(nx)
-#    if filt_type == 'gauss': filter = gauss_filter_2d(k,par)
+    if len(xarr) == 0:
+        nx = len(arr)         # it's strictly one dimensional!
+        k  =  np.fft.fftfreq(nx)
+    else:
+        nx = len(arr)         # it's strictly one dimensional!
+        raise Exception
+        
+        #    if filt_type == 'gauss': filter = gauss_filter_2d(k,par)
 #    if filt_type == 'hpcos': filter = hpcos_filter_2d(k,par)
 #    if filt_type == 'lpcos': filter = lpcos_filter_2d(k,par)
 #    if filt_type == 'bpcos': filter = bpcos_filter_2d(k,par)

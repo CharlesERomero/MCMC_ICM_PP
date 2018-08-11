@@ -60,8 +60,8 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
     bulk   = input_struct.bulk()    # Needs to be defined...
     ptsrcs = input_struct.ptsrc()   # Locations of point sources; not instrument-specific.
     blobs  = input_struct.blob()   # Locations of point sources; not instrument-specific.
-    dv = {}              # Data-related variables (e.g. maps)
-    ifp= {}              # Individual fitting parameters (components to be treated individually).
+    dv     = {}              # Data-related variables (e.g. maps)
+    ifp    = {}              # Individual fitting parameters (components to be treated individually).
     # Minimum and maximum of angular scales "probed" by your instruments
     minmax=np.array([30.0,30.0])*u.arcsec  # The minimum and maximum range you want your bins to cover
     mycluster = cluster_defaults(priors)   # A class with cluster-specific attributes
@@ -77,13 +77,13 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
         goodpix = dv[instrument].maps.masked_wts > 0             ## These are the pixels this instrument
         npix = len(dv[instrument].maps.masked_wts[goodpix])      ## is using.
         mask_rad = (np.sqrt(npix/np.pi))*dv[instrument].mapping.pixsize ## Which defines a radial limit.
-        if mask_rad > dv[instrument].FoV/1.9:     ## And the FOV defines a transfer function radial limit.
-            max_extent = dv[instrument].FoV/1.9   ## So, which one is limiting the range that we can fit?
+        if mask_rad > dv[instrument].FoV/1.4:     ## And the FOV defines a transfer function radial limit.
+            max_extent = dv[instrument].FoV/1.4   ## So, which one is limiting the range that we can fit?
         else:                                     ## 
-            max_extent = mask_rad                 ## With this figured out, we can look at other instruments too.
+            max_extent = mask_rad*0.9             ## With this figured out, we can look at other instruments too.
 
         ### These minmax are for the bins. Here, I am taking the min and max across instruments
-        minmax = angular_range(minmax,dv[instrument].fwhm/2.0,max_extent) #dv[instrument].fwhm
+        minmax = angular_range(minmax,dv[instrument].fwhm/1.8,max_extent) #dv[instrument].fwhm
         
         #print dv[instrument].mapping.pixsize,dv[instrument].FoV
         ### Mean levels figure into instrument-specific parameters.
@@ -92,13 +92,12 @@ def get_struct_of_variables(instruments,name,path=myhome+'/Results_Python/',
 
     ### Need to convert bins defined in kpc to arcseconds...
     ### Now, as the fitting parameters depends on the input file, let's get those:
-    cfp = mfp.common_fit_params(bins=bulk.bins,shbins=shocks.bins,path=path,
+    cfp = mfp.common_fit_params(bulk,shbins=shocks.bins,path=path,
                                 shockgeo=shocks.geoparams,shockfin=shocks.shockfin,
                                 ptsrcs=ptsrcs.locs,psfwhm=ptsrcs.fwhm,testmode=testmode,
-                                fbtemps=bulk.fbtemps,fstemps=shocks.fstemps,blobs=blobs.blobpars,
+                                fstemps=shocks.fstemps,blobs=blobs.blobpars,
                                 blobcens=[blobs.ra,blobs.dec],
-                                minmax=minmax,cluster=mycluster,fitbulkcen=bulk.fit_cen,
-                                fitbulkgeo=bulk.fit_geo)
+                                minmax=minmax,cluster=mycluster)
     # A correction on the total number of dimensions:
     ### 20 Feb 2018 - This correction is true, but I had to make the common_fit_params
     ### routine in-line with this!
@@ -274,7 +273,7 @@ class cluster_defaults:
         H0 = mycosmo['H0']
         h_70 = mycosmo['h_70'].value
         self.name = name
-        self.z = z
+        self.z = z              # should be a list
         self.E = (mycosmo['omega_m']*(1 + self.z)**3 + mycosmo['omega_l'])**0.5
         self.H = H0 * self.E
         self.dens_crit = (3 * (self.H)**2)/(8 * np.pi * const.G)
@@ -330,20 +329,24 @@ class mapping_info:
         print 'Pixel Size is: ',pixs
         theta_min=(pixs/2.0).to("radian").value
         #import pdb; pdb.set_trace()
-        xymap = mm.get_xymap(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))        # In arcseconds
-        arcmap = mm.get_radial_map(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))  # In arcseconds
-        x,y = xymap
+        xymap  = mm.get_xymap(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))       
+        arcmap = mm.get_radial_map(image_data,pixs,xcentre=x0.item(0),ycentre=y0.item(0))  
+        x,y    = xymap
         angmap = np.arctan2(y,x)                              # goes from -pi to +pi
-#        import pdb; pdb.set_trace()
         radmap = (arcmap*u.arcsec).to("rad").value            # In radians
-        rmval = radmap; bi=np.where(rmval < theta_min); rmval[bi]=theta_min
+        rmval  = radmap; bi=np.where(rmval < theta_min); rmval[bi]=theta_min
         radmap = rmval
         ### OK, the point source locations need to be defined here (Feb. 19, 2018)
         ptxys=[]
         for myptsrc in ptsrcs.locs:
-            x1,y1=w.wcs_world2pix(myptsrc[0].to('deg'),myptsrc[1],0)
-            xpt,ypt = x1-x0, y1-y0          # Must calculate them relative defined coordinate system!
+            x1,y1=w.wcs_world2pix(myptsrc[0].to('deg'),myptsrc[1].to('deg'),0)
+            x1,y1=w.all_world2pix(myptsrc[0].to('deg'),myptsrc[1].to('deg'),0)
+
+            ### Calculate offsets relative to xymap
+            xpt,ypt = (x1-x0)*(pixs.to('arcsec')).value, (y1-y0)*(pixs.to('arcsec')).value 
+            print('Point source offsets are: ',xpt,ypt)
             ptxys.append((xpt,ypt))
+            
             #import pdb;pdb.set_trace()
 
         ############################################################################################

@@ -9,19 +9,36 @@ myhome = expanduser("~")
 
 class common_fit_params:
 
-    def __init__(self,bins=[6],shbins=[6],path=myhome+'/Results_Python/',
+    def __init__(self,bulk,shbins=[6],path=myhome+'/Results_Python/',
                  bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
                  shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
-                 ptsrcs=[],psfwhm=[],blobs=[],fbtemps=[False],fstemps=[False],
+                 ptsrcs=[],psfwhm=[],blobs=[],fstemps=[False],
                  minmax=np.array([2.0,100.0])*u.arcsec,blobcens=[[0],[0]],
-                 cluster=None,testmode='Test',autodetect=False,fitbulkcen=[False],
-                 fitblobcen=[False],fitptcen=[False],fitshockcen=[False],
-                 fitbulkgeo=[False]):
+                 cluster=None,testmode='Test',autodetect=False,
+                 fitblobcen=[False],fitptcen=[False],fitshockcen=[False]):
+
+    ### Pre-August 9 2018.
+        #def __init__(self,bins=[6],shbins=[6],path=myhome+'/Results_Python/',
+        #         bulkgeo=[],bulknarm=[False],bulkcen=[],bulkalp=[],
+        #         shockgeo=[],shocknarm=[True],shockalp=[],shockfin=[True],
+        #         ptsrcs=[],psfwhm=[],blobs=[],fbtemps=[False],fstemps=[False],
+        #         minmax=np.array([2.0,100.0])*u.arcsec,blobcens=[[0],[0]],
+        #         cluster=None,testmode='Test',autodetect=False,fitbulkcen=[False],
+        #         fitblobcen=[False],fitptcen=[False],fitshockcen=[False],
+        #         fitbulkgeo=[False]):
 
     ##################################################################################
     #####      Let's first prepare the bins for our bulk and shock components    #####
     ##################################################################################
 
+        #if type(bulk.fbtemps) == type(None):
+        #    fbtemps=[False]
+        fbtemps     = bulk.fbtemps
+        bins        = bulk.bins
+        fitbulkgeo  = bulk.fit_geo
+        fitbulkcen  = bulk.fit_cen
+        model       = bulk.model
+        
         bulkarc = []
         mygeo   = []
         geoparams=[0,0,0,1,1,1,0,0]
@@ -82,7 +99,8 @@ class common_fit_params:
         self.bulknarm = bulknarm   # set the normalization method
         self.bulkfix  = False
         self.fbtemps  = fbtemps    # Fit for bulk profile temperatures (if X-ray data is present)
-        
+        self.model    = model      # one of ['NP','GNFW','BETA'] pressure profile models
+
         self.ptsrc    = ptsrcs     # Provide a list of centroids.
         self.psfwhm   = psfwhm     # list of FWHM...if not truly point-like
         self.shockalp = shockalp   # Provide a list of shock log pressure slope
@@ -140,34 +158,37 @@ class common_fit_params:
         nextra = nextra+2*len(bulkarc)    if fitbulkgeo  == [True] else nextra+0
         
         self.ndim += nextra
-
+        totaldim = self.ndim + len(self.ptsrc) + 1
         
         self.testmode = testmode      
 ### "Testing" values:
         ### Here is the longest I would think to do:
         if testmode == 'XLong':
-            self.nwalkers= int(self.ndim *2)*2
+            self.nwalkers= int(totaldim *2)*2
             self.nsteps  = 20000
             self.burn_in = 3000
-        if testmode == 'Long':
-            self.nwalkers= int(self.ndim *1.5)*2
+        elif testmode == 'Long':
+            self.nwalkers= int(totaldim *1.5)*2
             self.nsteps  = 5000
             self.burn_in = 1500
         ### And here is a test mode which really just verifies that the code will run.
         elif testmode == 'Test':
-            self.nwalkers= self.ndim *2 + 10   # Whatever...as it needs to be.
+            self.nwalkers= totaldim *2 + 10   # Whatever...as it needs to be.
             self.nsteps  = 25                  # Seriously need to push to small numbers
             self.burn_in = 5                   # Really small numbers
         ### The following is designed to show the burn-in steps:
         elif testmode == 'Burn':             
-            self.nwalkers= self.ndim *2 + 10
+            self.nwalkers= totaldim *2 + 10
             self.nsteps  = 500
             self.burn_in = 100
         ### This can be the "standard" ("Full") run:
         else:
-            self.nwalkers= int(self.ndim *1.5)*2
+            self.nwalkers= int(totaldim *1.5)*2
             self.nsteps  = 2500
             self.burn_in = 500
+
+        print('You are set to use the following MCMC parameters under mode '+testmode+':')
+        print('N_Walkers: ',self.nwalkers,' N_steps: ',self.nsteps,' Burn_in: ',self.burn_in)
 
 
 #########################################################################################
@@ -211,6 +232,11 @@ class inst_fit_params:
         if self.mn_lvl == True : n_add_params+=1
         self.n_add_params = n_add_params
         self.calunc = inputs.calunc
+
+        print('Your mean level and point source fitting values are: ')
+        print('mn_lvl: ',self.mn_lvl)
+        print('pt_src: ',self.pt_src)
+        print('<<<<{{{{(((([[[[-_-_-_-_-_-_-_-_-]]]]))))}}}}>>>>')
         #self.caloff = 1.0
     
 def convert_kpc_to_rad(bins,ang_dist):

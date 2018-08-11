@@ -39,12 +39,14 @@ instrument='MUSTANG2'; savedir=myhome+'/Results_Python'
 testmode='Full'; nthreads=1
 
 #name='2xmm'; reduc='PCA'
-name='idcs'; reduc='PCA'
-#name='rdcs0910'; reduc='PCA'
+#name='idcs'; reduc='PCA'
+name='rdcs0910'; reduc='CMCORR'
 #name='rxj1053'; reduc='CMCORR'
+#name='lynx'; reduc='PCA'
 # Available testmodes: 'Test', 'Burn', 'Long', and 'Full' (the default).
 
-tag=reduc+'_ptsrcs_'
+tag=reduc+'-v0_'
+#tag=reduc+'_2ptsrc_'
 ################ Get parameters for fitting procedure: ####################
 hk,dv,ifp= cv.get_struct_of_variables([instrument],name,savedir,testmode=testmode,
                                       reduc=reduc)
@@ -62,7 +64,8 @@ pr.disable()
 hdu = mlf.post_mcmc(sampler,t_mcmc,efv,hk,dv,ifp)    
 
 ######################### Plot the results ################################
-pmr.plot_results(hk,dv,efv,sampler,hdu,ifp)
+### Overlay options: 'russell', 'input', or None
+pmr.plot_results(hk,dv,efv,sampler,hdu,ifp,overlay='a10')
 print 'type: mlf = reload(mlf)'
 import pdb; pdb.set_trace()
 #mlf.post_check(sampler,t_mcmc,efv,hk,dv,ifp)

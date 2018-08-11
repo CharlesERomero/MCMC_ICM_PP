@@ -386,26 +386,32 @@ class radial_bin:
 
         
 def plot_one_slice(myslice,myformat='png',fig = None,target='RXJ1347',savedir=newpath,
-                   prefilename='Testing_slice_profiles_',
+                   prefilename='Radial_profile_',myfontsize=5,
                    mylabel="Radial profile, azimuthal slice"):
 
     if type(fig) == type(None):
-        fig = plt.figure(2,figsize=(20,12));    plt.clf()
+        fig = plt.figure(2,figsize=(5,3),dpi=300);    plt.clf()
+        #fig = plt.figure(2,figsize=(20,12));    plt.clf()
         doleg = False
-        plt.xlabel("Radius ("+myslice.radunits+")")
-        plt.ylabel("Map Intensity ("+myslice.profunits+")")
-        plt.title(target)
+        plt.xlabel("Radius ("+myslice.radunits+")",fontsize=myfontsize)
+        plt.ylabel("Map Intensity ("+myslice.profunits+")",fontsize=myfontsize)
+        #fig.tick_params(axis='both', which='major', labelsize=5)
+        plt.xticks(fontsize=5)
+        plt.yticks(fontsize=5)
+        plt.title(target,fontsize=myfontsize)
         plt.grid()
     else:
         doleg = True
+
+    #print(myfontsize)
         
     xerr = [myslice.rads - myslice.radmin, myslice.radmax-myslice.rads]
     yerr = [myslice.profrms/np.sqrt(myslice.npix),myslice.profrms/np.sqrt(myslice.npix)]
     plt.errorbar(myslice.rads,myslice.profavg,xerr=xerr,yerr=yerr,fmt='.',
-                 label=mylabel,capsize=5)
-    filename='v0.'
+                 label=mylabel,capsize=3)
+    filename=target+'_pc.'
     fullpath = os.path.join(savedir,prefilename+filename+myformat)
-    if doleg == True: plt.legend()
+    if doleg == True: plt.legend(fontsize=myfontsize)
     plt.savefig(fullpath,format=myformat)
 
     return fig
@@ -425,7 +431,7 @@ def plot_slices_one_inst(myslices,myformat='png'):
     plt.grid()
     plt.legend()
     #newpath='/home/romero/Results_Python/MUSTANG2/rxj1347_wshock'
-    prefilename='Testing_slice_profiles_'
+    prefilename='Radial_profiles_'
     filename='v0.'
     fullpath = os.path.join(newpath,prefilename+filename+myformat)
     plt.savefig(fullpath,format=myformat)

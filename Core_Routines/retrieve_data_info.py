@@ -63,8 +63,19 @@ def inst_params(instrument):
         fwhm  = 58.0*u.arcsec
         smfw  = 60.0*u.arcsec
         freq  = 140.0*u.gigahertz    # GHz
-        FoV   = 8.0*u.arcmin * (u.arcmin).to("arcsec")
+        FoV   = 8.0*u.arcmin #* (u.arcmin).to("arcsec")
 
+    if instrument == "SZA":
+        fwhm1 = 1.6*60.0*u.arcsec  # arcseconds
+        norm1 = 1.0     # normalization
+        fwhm2 = 1.0*u.arcsec # arcseconds
+        norm2 = 0.00     # normalization
+        fwhm  = 1.6*60.0*u.arcsec
+        smfw  = 1.5*60.0*u.arcsec
+        freq  = 31.0*u.gigahertz    # GHz
+        FoV   = 30.0*u.arcmin #* (u.arcmin).to("arcsec")
+        
+        
 #    else:
 #        fwhm1=9.0*u.arcsec ; norm1=1.0
 #        fwhm2=30.0*u.arcsec ; norm2=0.0
@@ -164,6 +175,12 @@ def inst_bp(instrument,array="2"):
         NRuz = Ruze / np.max(Ruze)        # Normalize it
         band = tran * Ruze                # Bandpass, with (unnormalized) Ruze efficiency
         farr = freq
+
+    if instrument == "SZA":
+
+        flow = 30.0; fhigh=32.0
+        farr = np.arange(flow,fhigh,0.5)  # ??? Clueless here.
+        band = farr*0.0 + 1.0             # Just uniform across the range...
         
 #########################################################################
 
@@ -198,8 +215,8 @@ class maps:
                 self.wts    = wt_map*1.0e6
                 self.masked_wts = wt_map*1.0e6
             nzwts = (wt_map > 0)
-            keep=np.where(wt_map > np.median(wt_map[nzwts])/2.0)
-            mask=np.where(wt_map < np.median(wt_map[nzwts])/2.0)
+            keep=np.where(wt_map > np.median(wt_map[nzwts])/1.5)
+            mask=np.where(wt_map < np.median(wt_map[nzwts])/1.5)
             gwts = wt_map[keep]
             npix = len(gwts)
             print 'FYI: with a mask threshold of median(wt_map), we use ',npix,\
@@ -492,7 +509,7 @@ def get_bv_from_Jy2K(Jy2K,instrument):
     wl = (const.c / freq).to('m').value
     a2r = ((1.0/3600.0/180.)*np.pi)**2
     rjk = (1e-3 *wl**2)/(2.0*1.38064)  # 1e-26 / 1e-23 = 1e-3 (1e-26 for Jy to W; 1e-23 for OoM of Boltzmann constant)
-    vol = Jy2K / (a2r/rjk)
+    vol = Jy2K / (a2r/rjk) * u.arcsec**2
 
     return vol
 

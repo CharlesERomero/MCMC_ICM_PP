@@ -10,6 +10,7 @@ import collect_variables as cv
 import save_image as si
 import ellipsoidal_shells as es
 import matplotlib.ticker as ticker
+import cluster_pressure_profiles as cpp
 
 myfontsize=20
 
@@ -50,19 +51,27 @@ def plot_results(hk,dv,efv,sampler,hdu,ifp,overlay=None):
     
     ### I am 99.99% sure I don't want to loop over instruments here.
     for myinst in hk.instruments:
- 
-        r_bins= hk.cfp.bulkarc[ibulk] # Bulkarc is defined in radians.
-        arcbins = r_bins * (u.rad).to("arcsec")
+
+        #r_bins= hk.cfp.bulkarc[ibulk] # Bulkarc is defined in radians.
         plot_steps(sampler,hk.cfp,hk.hk_outs.newpath,hk.hk_outs.prefilename+tstr,efv)
-        
+            
         ###############################################################################
-        ### Need to list keys in efv.paramdict[inst]
-        mycomponent = 'Bulk'; mycount=1
-        plot_pres_bins(arcbins,efv,hk,hk.cluster,tstr+'bulk_',center=False,overlay=overlay,
-                       inst=myinst,count=mycount,component=mycomponent)
+        for r_bins in hk.cfp.bulkarc:
+            arcbins = r_bins * (u.rad).to("arcsec")
+        
+            ### Need to list keys in efv.paramdict[inst]
+            mycomponent = 'Bulk'; mycount=1
+            if hk.cfp.model == 'NP':
+                plot_pres_bins(arcbins,efv,hk,hk.cluster,tstr+'bulk_',center=False,overlay=overlay,
+                               inst=myinst,count=mycount,component=mycomponent)
+            if hk.cfp.model == 'GNFW':
+                plot_gnfw(arcbins,efv,hk,tstr+'bulk_',center=False,overlay=overlay,
+                          inst=myinst,count=mycount,component=mycomponent)
+                
         ###############################################################################
         #import pdb;pdb.set_trace()
         if len(hk.cfp.shockbin) > 0:
+            arcbins = hk.cfp.shockbin[0] * (u.rad).to("arcsec")
             mycomponent = 'Shock'; mycount=1
             plot_pres_bins(arcbins,efv,hk,hk.cluster,tstr+'shock_',overlay=overlay,inst=myinst,count=mycount,
                            component=mycomponent)
@@ -81,6 +90,7 @@ def plot_comps_and_resids(hk,dv,efv,hdu,tstr,ifp,overlay=None):
     pos_comps  = set(efv.compname) #.intersection(['bulk','ptsrc','shock','blob'])
     comp_maps={}               # Here, dictionary by component and instrument
     mydatamaps={}; residual={}; filtimg={}; wbi={}; doublecheck={} # And here, by just instrument
+    myresidual={};
     pos = efv.solns[:,0]       # Correct units...the unitless kind, mostly
 
     mnlvlmaps,ptsrcmaps,maps,yint,outalphas = mlf.make_skymodel_maps(pos,hk,dv,ifp,efv)
@@ -103,9 +113,10 @@ def plot_comps_and_resids(hk,dv,efv,hdu,tstr,ifp,overlay=None):
                                                           hdu,returnwcs=True)
             filtimg[myinst] = plot_best_sky(comp_maps[component],hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,
                                             dv,mycomp=component,count=mycount,w=wbi)
-            residual[myinst] = mydatamaps[myinst] - filtimg[myinst]
-            plot_best_sky(residual,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv,
+            myresidual[myinst] = mydatamaps[myinst] - filtimg[myinst]
+            plot_best_sky(myresidual,hk.hk_outs.newpath, hk.hk_outs.prefilename+tstr,dv,
                           mycomp='residual_after_'+component,w=wbi)
+            residual[myinst] = residual[myinst] - filtimg[myinst]
 
         doublecheck[myinst] = mydatamaps[myinst]-models[myinst]
 
@@ -226,6 +237,9 @@ def plot_pres_bins(radarr,efv,hk,cluster,tstr,center=True,overlay=None,inst=None
     if hk.hk_ins.name == "abell_2146":
         rin = (hk.hk_ins.rads_nw[1]*u.kpc/cluster.scale).value
         rout= (hk.hk_ins.rads_nw[2]*u.kpc/cluster.scale).value
+
+    if overlay == 'a10':
+        overplot_a10(hk)
 
     if overlay == 'input':
         overplot_input(hk,efv,cluster)
@@ -391,6 +405,23 @@ def plot_sky_map(fullpath,image,title,mapaxisunits,mapunits,format='png'):
     cbar = plt.colorbar();    cbar.set_label(mapunits,fontsize=myfontsize)
     plt.savefig(fullpath,format=format)
     plt.close()
+
+
+def overplot_a10(hk): 
+
+    #,myfontsize=15
+    Pdl2y   = (hk.av.szcu['thom_cross']*hk.cluster.d_a/hk.av.szcu['m_e_c2']).to("cm**3 keV**-1")
+    R500    = (hk.cluster.R_500/hk.cluster.d_a).decompose()
+    radnx   = np.array([1.0,300.0]) * (u.arcsec).to('rad')
+    nbins   = 100
+    oprads  = np.logspace(np.log10(radnx[0]),np.log10(radnx[1]), nbins)
+    plotrads= oprads * (u.rad).to('arcsec')
+    a10pres = cpp.a10_gnfw(hk.cluster.P_500,R500,hk.av.mycosmo,oprads)
+    plotpres= a10pres.value
+    #import pdb;pdb.set_trace()
+    plt.plot(plotrads,plotpres,"g",label="A10 Pressure Profile") #,fontsize=myfontsize
+    plt.xlim((np.min(plotrads)/3.0,np.max(plotrads)*3.0))
+
     
 def overplot_input(hk,efv,cluster):
 
@@ -454,3 +485,45 @@ def overplot_russell(efv,cluster):
     #cv.print_attributes(fit_params)
 #    psolns = (efv.paramdict[inst][compname]/(efv.Pdl2y)).to(efv.punits)
 
+def plot_gnfw(arcbins,efv,hk,tstr,center=False,overlay=None,inst=None,count=None,
+              component=None):
+
+    myradii   = np.logspace(-3,1,100)*(hk.cluster.R_500)
+    mytheta   = ((myradii/hk.cluster.d_a).decompose()*u.rad).to('arcsec')
+    compname  = component+str(count)
+    mygnfwpar = efv.solns[efv.paramdict[inst][compname+'_ind'],:]
+    gnfwpar   = mygnfwpar[:,0]
+    #import pdb;pdb.set_trace()
+    myprof  = cpp.gnfw(hk.av.mycosmo['h_70'], myradii, hk.cluster.P_500, hk.cluster.R_500,
+                                c500=gnfwpar[0], p=gnfwpar[1], a=1.0510, b=gnfwpar[2], c=gnfwpar[3])
+
+    plt.figure(2,figsize=(20,12));    plt.clf()
+    plt.plot(mytheta.value,myprof.value,"b",label="Fitted Pressure Profile") #,fontsize=myfontsize
+
+    if overlay == 'a10':
+        overplot_a10(hk)
+        
+    fwhm1,norm1,fwhm2,norm2,fwhm,smfw,freq,FoV = rdi.inst_params(inst)
+    rin = fwhm.to("arcsec").value / 2.0; rout = FoV.to("arcsec").value / 2.0; axcol = 'r'
+    plt.axvline(rin,color=axcol, linestyle ="dashed")
+    plt.axvline(rout,color=axcol, linestyle ="dashed")
+    plt.yscale("log")
+    plt.xscale("log")
+    punits=efv.punits; runits=efv.runits
+    plt.xlabel("Radius ("+runits+")",fontsize=myfontsize)
+    plt.ylabel("Pressure ("+punits+")",fontsize=myfontsize)
+    #import pdb;pdb.set_trace()
+    #plt.xlim((np.min(mytheta.value),np.max(mytheta.value)))
+    plt.title(hk.cluster.name,fontsize=myfontsize)
+    plt.xticks(fontsize=myfontsize)
+    plt.yticks(fontsize=myfontsize)
+    plt.grid()
+    plt.legend(fontsize=myfontsize)
+    filename = tstr+"pressure_gnfw.png"
+    fullpath = os.path.join(hk.hk_outs.newpath,hk.hk_outs.prefilename+filename)
+    plt.savefig(fullpath)
+    filename = tstr+"pressure_gnfw.eps"
+    fullpath = os.path.join(hk.hk_outs.newpath,hk.hk_outs.prefilename+filename)
+    plt.savefig(fullpath,format='eps')
+    #import pdb;pdb.set_trace()
+    plt.close()

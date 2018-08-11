@@ -12,11 +12,15 @@ import os
 import retrieve_data_info as rdi
 import instrument_processing as ip
 import Azimuthal_Brightness_Profiles as ABP
+import matplotlib.pyplot as plt
+import retrieve_data_info as rdi
+import image_filtering as imf
 
 #import create_gNFW_maps as cgm
 cosmo,mycosmo = mad.get_cosmology("Concordance")
 #M500 = 7.8 * 10**14* const.M_sun; z = 0.89   # For CLJ 1226
 #z=1.99, M500=0.63 * 10**14* const.M_sun      # For Stefano's cluster
+defpath='/home/romero/Results_Python/MUSTANG2'
 
 def get_d_a(z):
 
@@ -104,8 +108,8 @@ def compton_y_profile_from_m500_z(M500, z, mycosmo):
 
     myprof, radii = pressure_profile_from_m500_z(M500, z, mycosmo, N_R500 = 10.0)
 
-    R500, P500 = R500_P500_from_M500_z(M500, z, mycosmo)
-    R_scaled = np.logspace(np.log10(10.0**(-4)), np.log10(5.0), 9000)
+    R500, P500   = R500_P500_from_M500_z(M500, z, mycosmo)
+    R_scaled     = np.logspace(np.log10(10.0**(-4)), np.log10(5.0), 9000)
     radProjected = R_scaled*R500
 
     m_e_c2 = (const.m_e *const.c**2).to("keV")
@@ -183,7 +187,7 @@ def Y_sphere(myprof, radii, Rmax, d_ang = 0, z=1.99):
 
 def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,savedir=None,
                     filename='gNFW_map.fits', instrument='MUSTANG2',T_e = 5.0,units='Jy',
-                    beta=0.0, betaz=0.0,prefile='ProfilePlot_'):
+                    beta=0.0, betaz=0.0,prefile='ProfilePlot_',fig=None,obstarget='cluster'):
     """
     yprof         - A list/array of Compton y values
     theta_range   - The associated array of radii (on the sky) in radians.
@@ -197,6 +201,7 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
     units         - The sky brightness units - either 'Jy' (for Jy/beam) or 'Kelvin'.
     beta          - total speed of the cluster (as a fraction of c)
     betaz         - spped of the cluster along the line of sight (+ is away from us)
+    fig           - Pass in a figure object to make overplots.
 
     """
     
@@ -217,7 +222,7 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
 
     tSZ,kSZ = rdi.get_sz_bp_conversions(T_e,instrument,bv,units,array="2",
                                         inter=False,beta=beta,betaz=betaz,rel=True)
-    Sky_Bright = filt_img * tSZ   # Map in measurable units (either Kelvin or Jy/beam)
+    Sky_Bright = filt_img * tSZ.value   # Map in measurable units (either Kelvin or Jy/beam)
     
     hdu   = mm.make_hdu(mymap, w, filt_img, Sky_Bright)
 
@@ -230,28 +235,38 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
     print fullpath
     mm.write_hdu_to_fits(hdu,fullpath)
 
-    rmstarget=25.0
+    rmstarget=56.0
     rmsmap = make_rmsMap(xymap,theta_range,rmstarget,conv=tSZ)
     compyrms = np.abs(rmstarget/tSZ)
     rmsstr = "{:4.2f}".format(compyrms)
     
-    fig=None
-    #prefilename=
-    #prefilename='HSC_DDT_3e14_z1p2_A10_plots'
-    #prefilename='HSC_DDT_1e14_z1p2_A10_plots'
+    if type(fig) == type(None):
+        maxind=3
+    else:
+        maxind=2
+        
     for thismap,thislab,index in zip([mymap, filt_img, rmsmap],['Sky Map','Filtered Map','center RMS: '+rmsstr+'e-6 Compton y'],
                                      [1,2,3]):
-
+        if index > maxind: continue
+        
         angmin = 0.0;  angmax = 2.0*np.pi
         mythetamask = np.zeros(thismap.shape)
 
         rads, prof, mythetamask = ABP.get_az_profile(thismap, xymap, angmin, angmax,
                                                  thetamask=mythetamask)
-        mybins = np.arange(0.0,120.0,4.0)
-        binres = ABP.radial_bin(rads, prof,10,rmax=120.0,bins=mybins,minangle=angmin,maxangle=angmax,
+        if maxind == 2:
+            prof*=tSZ.value
+            mytarget = obstarget
+        else:
+            mytarget = obstarget+'_'+prefile
+        mybins = np.arange(0.0,180.0,5.0)
+        binres = ABP.radial_bin(rads, prof,10,rmax=180.0,bins=mybins,minangle=angmin,maxangle=angmax,
                                 profunits='Compton y')
-        
-        fig    = ABP. plot_one_slice(binres,myformat='png',fig = fig,target=prefile,
+        if index == 2:
+            filbinres = binres
+
+            
+        fig    = ABP.plot_one_slice(binres,myformat='png',fig = fig,target=mytarget,
                                      savedir=savedir,prefilename=prefile,mylabel=thislab)
         #import pdb;pdb.set_trace()
         
@@ -259,13 +274,14 @@ def create_gNFW_map(yprof, theta_range, xsize=512, ysize=512, mappixsize=2.0,sav
             bpixv = ((binres.npix*(mappixsize*u.arcsec)**2)/bv).decompose()
             print bpixv
             binres.profavg /= np.sqrt(bpixv.value)
+
+            sig = filbinres.profavg / binres.profavg
+            
+            
             thislab = 'Standard error of the mean'
             #import pdb;pdb.set_trace()
             fig    = ABP.plot_one_slice(binres,myformat='png',fig = fig,target=prefile,
                                          savedir=savedir,prefilename=prefile,mylabel=thislab)
-
-            
-            
         
 def make_rmsMap(xymap,theta_range,target=25.0,conv=1.0):
     """
@@ -284,4 +300,41 @@ def make_rmsMap(xymap,theta_range,target=25.0,conv=1.0):
 
     return mymap
     
+def plot_y_from_z_m500(fig,z,mym500,myunits='Jy',instrument='MUSTANG2',temp=5,bv=120.0,
+                       savedir=defpath,myformat='png',target='cluster',myfontsize=15,
+                       pixsize=1.0):
+
+    M500          = mym500 * 10**14* const.M_sun     
+    R500, P500    = R500_P500_from_M500_z(M500, z, mycosmo)
+    yprof, inrad  = compton_y_profile_from_m500_z(M500, z, mycosmo)
+    ang_dist      = get_d_a(z)
+    theta_range   = (inrad/ang_dist).decompose()
+    theta_range   = theta_range.value * (u.rad).to('arcsec')
+
     
+    ax = fig.add_subplot(111)
+    ax.set_ylim(ax.get_ylim())
+    ax.set_xlim(ax.get_xlim())
+
+    tSZ,kSZ = rdi.get_sz_bp_conversions(temp,instrument,bv,units=myunits)
+    mapprof = yprof*tSZ
+    #import pdb;pdb.set_trace()
+
+    linrads = (np.arange(int(np.max(theta_range)/(2.0*pixsize)))+1.0)*pixsize
+    linprof = np.interp(linrads,theta_range,mapprof)
+
+    xfer_class = mm.xfer_fxn(instrument)
+    my_xfer    = rdi.get_xfer(xfer_class)
+    myk        = my_xfer[0,0:]*pixsize
+
+    filtprof = imf.fourier_filtering_1d(linprof,'tab',(myk,my_xfer[1,0:]))
+    
+    #import pdb;pdb.set_trace()
+    ax.plot(theta_range,mapprof,label='Unfiltered A10 profile',color='g')
+    ax.plot(linrads,filtprof,label='Filtered A10 profile',color='r')
+    plt.legend(fontsize=myfontsize)    
+    prefilename='Radial_profiles_'
+    filename=target+'_v2.'
+    fullpath = os.path.join(savedir,prefilename+filename+myformat)
+    #if doleg == True: plt.legend()
+    plt.savefig(fullpath,format=myformat)

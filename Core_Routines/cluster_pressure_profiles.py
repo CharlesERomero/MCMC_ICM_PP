@@ -27,13 +27,13 @@ def a10_gnfw(P500,R500,mycosmo,radii):
 
     #result = (P0 / (((rf)**c)*((1 + (rf)**a))**((b - c)/a)))
 
-    result = gnfw(mycosmo, radii, P500, R500)
+    result = gnfw(mycosmo['h_70'], radii, P500, R500)
     
     return result  ### HAS UNITS ASSOCIATED WITH IT!
 
-def gnfw(mycosmo, radii, P500, R500, c500= 1.177, p=8.403, a=1.0510, b=5.4905, c=0.3081):
+def gnfw(h70, radii, P500, R500, c500= 1.177, p=8.403, a=1.0510, b=5.4905, c=0.3081):
     
-    P0 = P500 * p * mycosmo['h_70']**-1.5
+    P0 = P500 * p * h70**-1.5
     rP = R500 / c500 # C_500 = 1.177
     rf =  (radii/rP).decompose().value # rf must be dimensionless
     result = (P0 / (((rf)**c)*((1 + (rf)**a))**((b - c)/a)))
